@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '$env/static/private';
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
 
@@ -11,7 +12,7 @@ export const actions: Actions = {
 			return fail(400, { error: 'Missing email or password' });
 		}
 
-		const response = await fetch('http://localhost:3000/api/v1/authentication/login', {
+		const response = await fetch(`${API_BASE_URL}/api/v1/authentication/login`, {
 			method: 'POST',
 			headers: {
 				'Content-Type': 'application/json'

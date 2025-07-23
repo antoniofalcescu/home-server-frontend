@@ -1,7 +1,8 @@
 import type { LayoutServerLoad } from './$types';
 import type { Session, User } from '$lib/types/auth';
 import { redirect } from '@sveltejs/kit';
-import { decodeJwt } from 'jose';
+import { JWT_SECRET } from '$env/static/private';
+import { jwtVerify } from 'jose';
 
 export const load: LayoutServerLoad = async ({ cookies, url }) => {
 	const token = cookies.get('jwt_token');
@@ -14,11 +15,23 @@ export const load: LayoutServerLoad = async ({ cookies, url }) => {
 		return { session: null };
 	}
 
-	const user = decodeJwt<User>(token);
-	const session: Session = {
-		user,
-		token
-	};
+	try {
+		const secret = new TextEncoder().encode(JWT_SECRET);
+		const { payload: user } = await jwtVerify<User>(token, secret);
 
-	return { session };
+		const session: Session = {
+			user,
+			token
+		};
+
+		return { session };
+	} catch (err) {
+		cookies.delete('jwt_token', { path: '/' });
+
+		if (pathname !== '/login') {
+			throw redirect(307, '/login');
+		}
+
+		return { session: null };
+	}
 };

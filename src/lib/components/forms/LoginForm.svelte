@@ -6,7 +6,7 @@
 	import { enhance } from '$app/forms';
 	import type { ActionData } from '../../../routes/login/$types';
 
-	export let form: ActionData;
+	let { form }: { form: ActionData } = $props();
 </script>
 
 <Card.Root class="w-full max-w-md">
