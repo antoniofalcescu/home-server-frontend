@@ -2,12 +2,14 @@
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { enhance } from '$app/forms';
-	import { AlertTriangle, Search, ChevronDown, ChevronUp } from 'lucide-svelte';
+	import { AlertTriangle, ChevronDown, ChevronUp, Search } from 'lucide-svelte';
 	import type { ActionData } from './$types';
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
 	import * as Select from '$lib/components/ui/select';
 
-	let { form }: { form: ActionData } = $props();
+	type FormActionData = ActionData;
+
+	let { form }: { form: FormActionData } = $props();
 
 	let query = $state('');
 	let isSearching = $state(false);
@@ -23,20 +25,34 @@
 	];
 
 	const sortOptions = [
-		{ value: 'asc', label: 'Ascending' },
-		{ value: 'desc', label: 'Descending' }
+		{ value: 'relevance', label: 'Relevance' },
+		{ value: 'date', label: 'Date' },
+		{ value: 'size', label: 'Size' },
+		{ value: 'downloads', label: 'Downloads' },
+		{ value: 'peers', label: 'Peers' }
 	];
 
 	const getCategoryLabel = (value: string) =>
 		categories.find((cat) => cat.value === value)?.label || 'Select a category';
 
 	const getSortLabel = (value: string | undefined) =>
-		sortOptions.find((sort) => sort.value === value)?.label || 'Select an order';
+		sortOptions.find((sort) => sort.value === value)?.label || 'Sort by';
+
+	// Would like to remove it
+	$effect(() => {
+		if (form?.success) {
+			if (form.category) {
+				selectedCategory = form.category as string;
+			}
+			if (form.sort) {
+				selectedSort = form.sort as string;
+			}
+		}
+	});
 </script>
 
 <!-- TODO:
   Check what can be refactored in the current code
-  Refactor and make filters menu prettier
   Add carousel component with dummy data
   Check what can be extracted into separate components
   Add error handling
@@ -52,7 +68,13 @@
 		method="POST"
 		action="?/search"
 		class="mb-4"
-		use:enhance={() => {
+		use:enhance={({ formData }) => {
+			// Add reactive filter state to the form data before submission
+			formData.set('category', selectedCategory);
+			if (selectedSort) {
+				formData.set('sort', selectedSort);
+			}
+
 			isSearching = true;
 			return async ({ update }) => {
 				await update();
@@ -61,7 +83,7 @@
 		}}
 	>
 		<!-- Search bar and buttons -->
-		<div class="mb-2 flex items-center gap-2">
+		<div class="flex items-start gap-2">
 			<div class="relative w-full">
 				<Input
 					type="search"
@@ -87,71 +109,78 @@
 				{/if}
 			</Button>
 
-			<!-- Filters toggle button -->
-			<Button
-				type="button"
-				variant="outline"
-				class="flex items-center gap-2"
-				onclick={() => (showFilters = !showFilters)}
-			>
-				Filters
+			<!-- Relative container for the filters dropdown -->
+			<div class="relative">
+				<!-- Filters toggle button -->
+				<Button
+					type="button"
+					variant="outline"
+					class="flex items-center gap-2"
+					onclick={() => (showFilters = !showFilters)}
+				>
+					Filters
+					{#if showFilters}
+						<ChevronUp class="h-4 w-4" />
+					{:else}
+						<ChevronDown class="h-4 w-4" />
+					{/if}
+				</Button>
+
+				<!-- Collapsible filters section -->
 				{#if showFilters}
-					<ChevronUp class="h-4 w-4" />
-				{:else}
-					<ChevronDown class="h-4 w-4" />
+					<div
+						class="bg-card animate-in slide-in-from-top-2 absolute top-full right-0 z-10 mt-2 w-64 rounded-lg border p-4 shadow-lg duration-200"
+					>
+						<div class="flex flex-col gap-4">
+							<div class="flex flex-col gap-2">
+								<label for="category-select" class="text-sm font-medium">Category</label>
+								<Select.Root name="category" type="single" bind:value={selectedCategory}>
+									<Select.Trigger class="w-full" id="category-select">
+										{getCategoryLabel(selectedCategory)}
+									</Select.Trigger>
+									<Select.Content>
+										{#each categories as category}
+											<Select.Item value={category.value}>{category.label}</Select.Item>
+										{/each}
+									</Select.Content>
+								</Select.Root>
+							</div>
+
+							<div class="flex flex-col gap-2">
+								<label for="sort-select" class="text-sm font-medium">Sort by</label>
+								<Select.Root name="sort" type="single" bind:value={selectedSort}>
+									<Select.Trigger class="w-full" id="sort-select">
+										{getSortLabel(selectedSort)}
+									</Select.Trigger>
+									<Select.Content>
+										{#each sortOptions as sortOption}
+											<Select.Item value={sortOption.value}>{sortOption.label}</Select.Item>
+										{/each}
+									</Select.Content>
+								</Select.Root>
+							</div>
+
+							<div class="-mx-4 my-2 border-t"></div>
+
+							<!-- Clear filters button -->
+							<Button
+								type="button"
+								variant="ghost"
+								class="w-full"
+								size="sm"
+								onclick={() => {
+									selectedCategory = 'all';
+									selectedSort = undefined;
+									showFilters = false;
+								}}
+							>
+								Clear Filters
+							</Button>
+						</div>
+					</div>
 				{/if}
-			</Button>
-		</div>
-
-		<!-- Collapsible filters section -->
-		{#if showFilters}
-			<div class="bg-muted/50 animate-in slide-in-from-top-2 rounded-lg border p-4 duration-200">
-				<div class="flex flex-wrap items-center gap-4">
-					<div class="flex flex-col gap-2">
-						<label for="category-select" class="text-sm font-medium">Category</label>
-						<Select.Root name="category" type="single" bind:value={selectedCategory}>
-							<Select.Trigger class="w-40" id="category-select">
-								{getCategoryLabel(selectedCategory)}
-							</Select.Trigger>
-							<Select.Content>
-								{#each categories as category}
-									<Select.Item value={category.value}>{category.label}</Select.Item>
-								{/each}
-							</Select.Content>
-						</Select.Root>
-					</div>
-
-					<div class="flex flex-col gap-2">
-						<label for="sort-select" class="text-sm font-medium">Sort by</label>
-						<Select.Root name="sort" type="single" bind:value={selectedSort}>
-							<Select.Trigger class="w-32" id="sort-select">
-								{getSortLabel(selectedSort)}
-							</Select.Trigger>
-							<Select.Content>
-								{#each sortOptions as sortOption}
-									<Select.Item value={sortOption.value}>{sortOption.label}</Select.Item>
-								{/each}
-							</Select.Content>
-						</Select.Root>
-					</div>
-
-					<!-- Clear filters button -->
-					<div class="flex flex-col justify-end">
-						<Button
-							type="button"
-							variant="ghost"
-							size="sm"
-							onclick={() => {
-								selectedCategory = 'all';
-								selectedSort = undefined;
-							}}
-						>
-							Clear Filters
-						</Button>
-					</div>
-				</div>
 			</div>
-		{/if}
+		</div>
 	</form>
 
 	{#if form?.error}
@@ -171,8 +200,7 @@
 			{/if}
 			{#if form.sort}
 				<p class="text-muted-foreground text-sm">
-					Sorted: <span class="font-medium">{form.sort === 'asc' ? 'Ascending' : 'Descending'}</span
-					>
+					Sorted by: <span class="font-medium capitalize">{form.sort}</span>
 				</p>
 			{/if}
 		</div>
@@ -182,11 +210,15 @@
 					<li class="rounded-md border p-4">
 						<h3 class="font-bold">{result.title}</h3>
 						<p>{result.description}</p>
-						<span
-							class="text-muted-foreground bg-muted mt-2 inline-block rounded px-2 py-1 text-xs"
-						>
-							{result.category}
-						</span>
+						<div class="text-muted-foreground mt-2 flex gap-4 text-xs">
+							<span class="bg-muted rounded px-2 py-1">
+								{result.category}
+							</span>
+							<span>Size: {result.size} MB</span>
+							<span>Downloads: {result.downloads}</span>
+							<span>Peers: {result.peers}</span>
+							<span>Date: {new Date(result.date).toLocaleDateString()}</span>
+						</div>
 					</li>
 				{/each}
 			{:else}
