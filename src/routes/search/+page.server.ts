@@ -1,10 +1,12 @@
 import { fail } from '@sveltejs/kit';
 import type { Actions } from './$types';
+import type { Session } from '$lib/types/auth';
 
-// TODO: Define realistic dummy data for the search results
-// TODO: on Node BE I should implement a GET by ids to get the needed details here to show in the carousel
+const BACKEND_API_URL = 'http://localhost:3000/api/v1'; // TODO: move to env var
+
 export const actions = {
-	search: async ({ request }) => {
+	search: async ({ request, locals }) => {
+		const session: Session = locals.session;
 		const data = await request.formData();
 		const query = data.get('query');
 		const category = data.get('category');
@@ -16,94 +18,129 @@ export const actions = {
 			return fail(400, { query, error: 'Please enter a search query.' });
 		}
 
-		// Dummy data generation
-		let dummyResults = [
-			{
-				id: 1,
-				title: `Result for "${query}" 1`,
-				description: 'This is a dummy result in books.',
-				category: 'books',
-				size: 100,
-				downloads: 50,
-				peers: 10,
-				date: new Date('2023-01-15')
-			},
-			{
-				id: 2,
-				title: `Result for "${query}" 2`,
-				description: 'This is another dummy result in movies.',
-				category: 'movies',
-				size: 200,
-				downloads: 100,
-				peers: 20,
-				date: new Date('2023-02-20')
-			},
-			{
-				id: 3,
-				title: `Result for "${query}" 3`,
-				description: 'Yet another dummy result in music.',
-				category: 'music',
-				size: 50,
-				downloads: 200,
-				peers: 5,
-				date: new Date('2023-03-25')
-			},
-			{
-				id: 4,
-				title: `Result for "${query}" 4`,
-				description: 'Another book result.',
-				category: 'books',
-				size: 120,
-				downloads: 30,
-				peers: 15,
-				date: new Date('2023-04-10')
-			},
-			{
-				id: 5,
-				title: `Result for "${query}" 5`,
-				description: 'Another movie result.',
-				category: 'movies',
-				size: 250,
-				downloads: 150,
-				peers: 25,
-				date: new Date('2023-05-05')
+		try {
+			// Step 1: Search for torrents by name
+			const searchResponse = await fetch(`${BACKEND_API_URL}/torrent/search`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.token}`
+				},
+				body: JSON.stringify({ name: query, searchLimit: 10 })
+			});
+
+			if (!searchResponse.ok) {
+				const errorData = await searchResponse.json();
+				return fail(searchResponse.status, {
+					query,
+					searchError: errorData.message || 'Search failed'
+				});
 			}
-		];
 
-		// Filter by category only if it's not "all"
-		if (category && category !== 'all') {
-			dummyResults = dummyResults.filter((result) => result.category === category);
+			const searchResult = await searchResponse.json();
+			const torrentIds = searchResult.torrents;
+
+			if (!torrentIds || torrentIds.length === 0) {
+				return {
+					success: true,
+					query,
+					category,
+					sort,
+					results: []
+				};
+			}
+
+			// Step 2: Fetch details for the found torrents
+			const detailsResponse = await fetch(
+				`${BACKEND_API_URL}/torrent/details?ids=${torrentIds.join(',')}`,
+				{
+					headers: {
+						Authorization: `Bearer ${session.token}`
+					}
+				}
+			);
+
+			if (!detailsResponse.ok) {
+				const errorData = await detailsResponse.json();
+				return fail(detailsResponse.status, {
+					query,
+					searchError: errorData.message || 'Failed to fetch torrent details'
+				});
+			}
+
+			const detailsResult = await detailsResponse.json();
+
+			let results = detailsResult.details.map((item: any) => ({
+				id: item.id,
+				title: item.title,
+				poster: item.poster,
+				description: item.description,
+				category: item.genre,
+				size: item.size,
+				downloads: item.snatches,
+				date: new Date(item.date)
+			}));
+
+			console.log(results);
+
+			// Sort results
+			switch (sort) {
+				case 'date':
+					results.sort((a: any, b: any) => b.date.getTime() - a.date.getTime());
+					break;
+				// TODO: size is string and can't be sorted properly
+				// case 'size':
+				// 	results.sort((a: any, b: any) => b.size - a.size);
+				// 	break;
+				case 'downloads':
+					results.sort((a: any, b: any) => b.downloads - a.downloads);
+					break;
+				default:
+					// Default to relevance or no sorting
+					results.sort((a: any, b: any) => b.title.localeCompare(a.title));
+					break;
+			}
+
+			return {
+				success: true,
+				query,
+				category,
+				sort,
+				results: results
+			};
+		} catch (error: any) {
+			return fail(500, { query, searchError: error.message || 'An unexpected error occurred' });
+		}
+	},
+	download: async ({ request, locals }) => {
+		const session: Session = locals.session;
+		const data = await request.formData();
+		const id = data.get('id');
+
+		if (!id || typeof id !== 'string') {
+			return fail(400, { downloadError: 'Invalid torrent ID.' });
 		}
 
-		// Sort results
-		switch (sort) {
-			case 'date':
-				dummyResults.sort((a, b) => b.date.getTime() - a.date.getTime());
-				break;
-			case 'size':
-				dummyResults.sort((a, b) => b.size - a.size);
-				break;
-			case 'downloads':
-				dummyResults.sort((a, b) => b.downloads - a.downloads);
-				break;
-			case 'peers':
-				dummyResults.sort((a, b) => b.peers - a.peers);
-				break;
-			default:
-				// Default to relevance or no sorting
-				dummyResults.sort((a, b) => b.title.localeCompare(a.title));
-				break;
+		try {
+			const downloadResponse = await fetch(`${BACKEND_API_URL}/torrent/download`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${session.token}`
+				},
+				body: JSON.stringify({ id })
+			});
+
+			if (!downloadResponse.ok) {
+				const errorData = await downloadResponse.json();
+				return fail(downloadResponse.status, {
+					downloadError: errorData.message || 'Download failed'
+				});
+			}
+
+			return { downloadSuccess: true, message: 'Download started successfully.' };
+		} catch (error: any) {
+			return fail(500, { downloadError: error.message || 'An unexpected error occurred' });
 		}
-
-		// Simulate network latency
-		await new Promise((resolve) => setTimeout(resolve, 500));
-
-		return {
-			success: true,
-			query,
-			category,
-			sort,
-			results: dummyResults
-		};
 	}
 } satisfies Actions;
