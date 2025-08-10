@@ -4,6 +4,7 @@ import type { Session } from '$lib/types/auth';
 
 const BACKEND_API_URL = 'http://localhost:3000/api/v1'; // TODO: move to env var
 
+// TODO: check what happens here and refactor and cleanup and handle errors
 export const actions = {
 	search: async ({ request, locals }) => {
 		const session: Session = locals.session;
