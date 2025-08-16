@@ -2,10 +2,10 @@
 	import type { ActionData } from './$types';
 	import { Toast } from '$lib/components/layout';
 	import { SearchResults, SearchForm } from './components';
+	import type { SearchActionData } from './types/server.types';
 
 	let { form }: { form: ActionData } = $props();
 
-	// Consolidated search state object
 	let searchState = $state({
 		query: '',
 		isSearching: false,
@@ -22,13 +22,12 @@
 		}
 
 		searchState.isSearching = true;
-		return async ({ result: actionResult, update }: any) => {
+		return async ({ result, update }: any) => {
 			searchState.isSearching = false;
 
-			if (actionResult.type === 'failure' && actionResult.data) {
-				const data = actionResult.data as { error?: string; searchError?: string };
-				const errorMessage = data.error || data.searchError || 'Search failed';
-				toastComponent.showToast('error', errorMessage);
+			const { data } = result;
+			if (!data.success) {
+				toastComponent.showToast('error', data.error);
 			} else {
 				await update();
 			}
@@ -51,12 +50,7 @@
 	/>
 
 	{#if form?.success}
-		<SearchResults
-			query={String(form.query || '')}
-			category={form.category ? String(form.category) : undefined}
-			sort={form.sort ? String(form.sort) : undefined}
-			results={form.results || []}
-		/>
+		<SearchResults data={form.data as SearchActionData} />
 	{/if}
 </div>
 

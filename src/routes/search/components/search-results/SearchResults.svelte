@@ -8,7 +8,8 @@
 	import { Toast } from '$lib/components/layout';
 	import type { Props } from './types';
 
-	let { query, category, sort, results }: Props = $props();
+	const { data }: Props = $props();
+	const { query, category, sort, torrents } = data;
 
 	let toastComponent: Toast;
 	let isDownloading = $state<{ [key: string]: boolean }>({});
@@ -30,35 +31,35 @@
 
 <Carousel.Root class="w-full">
 	<Carousel.Content>
-		{#if results.length > 0}
-			{#each results as result}
+		{#if torrents.length > 0}
+			{#each torrents as torrent}
 				<Carousel.Item class="basis-full">
 					<div class="p-1">
 						<Card.Root class="overflow-hidden">
 							<div class="grid h-full grid-cols-1 md:grid-cols-5">
 								<div class="md:col-span-2">
 									<img
-										src={result.poster}
-										alt={`Poster for ${result.title}`}
+										src={torrent.poster}
+										alt={`Poster for ${torrent.title}`}
 										class="h-full w-full object-cover"
 									/>
 								</div>
 								<div class="md:col-span-3">
 									<Card.Header>
-										<Card.Title class="text-xl font-bold">{result.title}</Card.Title>
+										<Card.Title class="text-xl font-bold">{torrent.title}</Card.Title>
 									</Card.Header>
 									<Card.Content class="grid gap-2 p-4">
 										<p class="line-clamp-3 text-sm text-gray-500">
-											{result.description}
+											{torrent.description}
 										</p>
 										<div class="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-											<Badge variant="secondary" class="px-2 py-0.5">{result.category}</Badge>
-											<Badge variant="outline" class="px-2 py-0.5">Size: {result.size}</Badge>
+											<Badge variant="secondary" class="px-2 py-0.5">{torrent.category}</Badge>
+											<Badge variant="outline" class="px-2 py-0.5">Size: {torrent.size}</Badge>
 											<Badge variant="outline" class="px-2 py-0.5"
-												>Downloads: {result.downloads}</Badge
+												>Downloads: {torrent.downloads}</Badge
 											>
 											<Badge variant="outline" class="px-2 py-0.5"
-												>Date: {new Date(result.date).toLocaleDateString()}</Badge
+												>Date: {new Date(torrent.date).toLocaleDateString()}</Badge
 											>
 										</div>
 									</Card.Content>
@@ -67,36 +68,24 @@
 											method="POST"
 											action="?/download"
 											use:enhance={({ formData }) => {
-												formData.set('id', result.id);
-												isDownloading[result.id] = true;
-												return async ({ result: actionResult }) => {
-													isDownloading[result.id] = false;
+												formData.set('id', torrent.id);
+												isDownloading[torrent.id] = true;
 
-													if (
-														actionResult.type === 'success' &&
-														actionResult.data &&
-														'downloadSuccess' in actionResult.data
-													) {
-														const data = actionResult.data as {
-															downloadSuccess: boolean;
-															message?: string;
-														};
-														toastComponent.showToast(
-															'success',
-															data.message || 'Download started successfully'
-														);
-													} else if (actionResult.type === 'failure' && actionResult.data) {
-														const data = actionResult.data as { downloadError?: string };
-														toastComponent.showToast(
-															'error',
-															data.downloadError || 'Download failed'
-														);
+												return async ({ result }: any) => {
+													isDownloading[torrent.id] = false;
+
+													const { data: actionData } = result;
+
+													if (actionData.success) {
+														toastComponent.showToast('success', actionData.data.message);
+													} else {
+														toastComponent.showToast('error', actionData.error);
 													}
 												};
 											}}
 											class="w-full"
 										>
-											<Button type="submit" class="w-full" disabled={isDownloading[result.id]}>
+											<Button type="submit" class="w-full" disabled={isDownloading[torrent.id]}>
 												<Download class="mr-2 h-4 w-4" />
 												<span>Download</span>
 											</Button>
