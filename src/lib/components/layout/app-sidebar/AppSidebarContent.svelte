@@ -15,17 +15,17 @@
 		},
 		{
 			title: 'Torrents',
-			url: '/',
+			url: '/torrents',
 			icon: Download
 		},
 		{
 			title: 'Dashboard',
-			url: '/',
+			url: '/dashboard',
 			icon: ChartLine
 		},
 		{
 			title: 'Settings',
-			url: '/',
+			url: '/settings',
 			icon: Settings
 		}
 	];

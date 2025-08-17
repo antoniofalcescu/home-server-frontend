@@ -10,7 +10,6 @@
 
 	let { searchState = $bindable(), onSearchEnhance, onClearFilters }: Props = $props();
 
-	// Component-level UI state
 	let showFilters = $state(false);
 </script>
 
