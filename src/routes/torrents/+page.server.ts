@@ -119,15 +119,60 @@ export const actions: Actions = {
 	convert: async ({ request }) => {
 		const data = await request.formData();
 		const torrentId = data.get('torrentId') as string;
+		const deleteAfterConvert = data.get('deleteAfterConvert') === 'true';
 
-		// Simulate conversion by removing the torrent
-		torrents = torrents.filter((t) => t.id !== torrentId);
+		// In a real app, this would:
+		// 1. Move/copy files to Jellyfin directory
+		// 2. Update Jellyfin library
+		// 3. Optionally remove torrent based on deleteAfterConvert flag
 
-		return { success: true, message: 'Torrent converted to Jellyfin format' };
+		if (deleteAfterConvert) {
+			// Remove the torrent if user opted to delete after conversion
+			torrents = torrents.filter((t) => t.id !== torrentId);
+			return { success: true, message: 'Torrent converted to Jellyfin format and deleted' };
+		} else {
+			// Keep the torrent but mark it as completed/seeding
+			torrents = torrents.map((t) =>
+				t.id === torrentId ? { ...t, status: 'seeding' as const } : t
+			);
+			return { success: true, message: 'Torrent converted to Jellyfin format' };
+		}
 	},
 
 	sync: async () => {
-		// Simulate sync by potentially updating some data
+		// Simulate sync by potentially updating some torrent data
+		// In a real app, this would call your Node.js backend which queries QBittorrent API
+
+		// For demo: randomly update progress on downloading torrents
+		torrents = torrents.map((torrent) => {
+			if (torrent.status === 'downloading' && torrent.progress < 100) {
+				const progressIncrease = Math.floor(Math.random() * 5) + 1; // 1-5% increase
+				const newProgress = Math.min(100, torrent.progress + progressIncrease);
+
+				// If torrent completes, update status
+				if (newProgress === 100) {
+					return {
+						...torrent,
+						progress: newProgress,
+						status: 'completed' as const,
+						downloadSpeed: '0 B/s',
+						eta: '∞'
+					};
+				}
+
+				return {
+					...torrent,
+					progress: newProgress,
+					// Slightly vary download speed for realism
+					downloadSpeed: `${(Math.random() * 5 + 8).toFixed(1)} MB/s`,
+					// Update ETA based on new progress
+					eta: newProgress > 95 ? '< 1m' : `${Math.floor(Math.random() * 30) + 5}m`
+				};
+			}
+
+			return torrent;
+		});
+
 		return { success: true, timestamp: Date.now() };
 	}
 };

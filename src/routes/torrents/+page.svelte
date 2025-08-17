@@ -8,26 +8,53 @@
 	import { Button } from '$lib/components/ui/button';
 	import { TorrentDetailsDialog, TorrentsTable } from './components';
 
-	export let data: PageData & { torrents: Torrent[]; stats: TorrentStats };
+	const { data }: { data: PageData & { torrents: Torrent[]; stats: TorrentStats } } = $props();
 
-	let lastSynced = 0;
-	let syncInterval: number;
-	let selectedTorrent: Torrent | null = null;
-	let dialogOpen = false;
+	const autoSyncInterval = 10;
+
+	let lastSynced = $state(0);
+	let selectedTorrent: Torrent | null = $state(null);
+	let dialogOpen = $state(false);
+	let isSyncing = $state(false);
 
 	onMount(() => {
-		syncInterval = setInterval(() => {
+		const lastSyncCounterInterval = setInterval(() => {
 			lastSynced += 1;
 		}, 1000);
 
+		const autoSyncTimerInterval = setInterval(() => {
+			if (document.visibilityState === 'visible' && !isSyncing) {
+				handleSync();
+			}
+		}, autoSyncInterval * 1000);
+
 		return () => {
-			clearInterval(syncInterval);
+			clearInterval(lastSyncCounterInterval);
+			clearInterval(autoSyncTimerInterval);
 		};
 	});
 
 	async function handleSync() {
+		if (isSyncing) return;
+
+		isSyncing = true;
 		lastSynced = 0;
-		await invalidateAll();
+
+		try {
+			const formData = new FormData();
+			const response = await fetch('?/sync', {
+				method: 'POST',
+				body: formData
+			});
+
+			if (response.ok) {
+				await invalidateAll();
+			}
+		} catch (error) {
+			console.error('Sync failed:', error);
+		} finally {
+			isSyncing = false;
+		}
 	}
 
 	function handleShowTorrentInfo(torrent: Torrent) {
@@ -45,9 +72,14 @@
 				<p class="text-muted-foreground mt-1">Manage your downloads and media library</p>
 			</div>
 			<div class="flex items-center gap-4">
-				<span class="text-muted-foreground text-sm">Last synced {lastSynced} seconds ago</span>
-				<Button onclick={handleSync} variant="outline" size="sm">
-					<RefreshCcw class="h-4 w-4" />
+				<!-- Last synced indicator -->
+				<span class="text-muted-foreground text-sm">
+					Last synced {lastSynced} seconds ago
+				</span>
+
+				<!-- Manual sync button -->
+				<Button onclick={handleSync} variant="outline" size="sm" disabled={isSyncing}>
+					<RefreshCcw class={`h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
 					Sync
 				</Button>
 			</div>
