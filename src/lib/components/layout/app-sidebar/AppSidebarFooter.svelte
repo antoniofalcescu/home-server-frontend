@@ -19,7 +19,7 @@
 					{#snippet child({ props })}
 						<Sidebar.MenuButton
 							{...props}
-							class="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-full"
+							class="group data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-full cursor-pointer"
 						>
 							<div class="flex w-full items-center gap-3">
 								{#if user.image}
@@ -31,16 +31,22 @@
 									<span class="font-bold">{user.username}</span>
 									<span class="text-muted-foreground text-sm">{user.role} Account</span>
 								</div>
-								<ChevronUp class="ml-auto" />
+								<ChevronUp
+									class="ml-auto transition-transform group-data-[state=open]:rotate-180"
+								/>
 							</div>
 						</Sidebar.MenuButton>
 					{/snippet}
 				</DropdownMenu.Trigger>
-				<DropdownMenu.Content side="top" class="mb-1 w-[var(--radix-dropdown-menu-trigger-width)]">
-					<DropdownMenu.Item>
+				<DropdownMenu.Content
+					side="top"
+					align="end"
+					class="w-[var(--radix-dropdown-menu-trigger-width)]"
+				>
+					<DropdownMenu.Item class="cursor-pointer">
 						<span>Account</span>
 					</DropdownMenu.Item>
-					<DropdownMenu.Item onclick={handleLogout}>
+					<DropdownMenu.Item onclick={handleLogout} class="cursor-pointer">
 						<span>Log out</span>
 					</DropdownMenu.Item>
 				</DropdownMenu.Content>
