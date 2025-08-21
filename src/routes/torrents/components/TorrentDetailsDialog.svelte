@@ -102,18 +102,6 @@
 						<p class="text-sm">↑ {torrent.uploadSpeed}</p>
 					</div>
 				</div>
-
-				<!-- Peers and Seeds -->
-				<div class="grid grid-cols-2 gap-4">
-					<div class="space-y-2">
-						<h3 class="text-muted-foreground text-sm font-semibold">Seeds</h3>
-						<p class="text-sm">{torrent.seeds}</p>
-					</div>
-					<div class="space-y-2">
-						<h3 class="text-muted-foreground text-sm font-semibold">Peers</h3>
-						<p class="text-sm">{torrent.peers}</p>
-					</div>
-				</div>
 			</div>
 		{/if}
 	</Dialog.Content>

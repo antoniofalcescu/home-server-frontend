@@ -8,10 +8,9 @@
 	import * as Card from '$lib/components/ui/card';
 	import * as Table from '$lib/components/ui/table';
 	import { DeleteConfirmationDialog, ConvertConfirmationDialog } from './index';
-	import type { Torrent } from '../types';
+	import type { Torrent } from '../types/_server';
 
 	// TODO: check the existing code and look for ways to refactor it and simplify it
-	// couple the sveltekit BE with Node BE instead of mocks
 	const { torrents, onShowInfo }: { torrents: Torrent[]; onShowInfo: (torrent: Torrent) => void } =
 		$props();
 

@@ -1,12 +1,14 @@
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
 import type { Session } from '$lib/types/auth';
+import type { ISecurity } from '$lib/interfaces/locals';
 
 declare global {
 	namespace App {
 		// interface Error {}
 		interface Locals {
 			session: Session;
+			security: ISecurity;
 		}
 		// interface PageData {}
 		// interface PageState {}

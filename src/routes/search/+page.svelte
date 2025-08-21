@@ -2,7 +2,7 @@
 	import type { ActionData } from './$types';
 	import { Toast } from '$lib/components/layout';
 	import { SearchResults, SearchForm } from './components';
-	import type { SearchActionData } from './types/server.types';
+	import type { SearchActionData } from './types/_server';
 
 	let { form }: { form: ActionData } = $props();
 

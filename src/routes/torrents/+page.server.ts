@@ -1,98 +1,76 @@
 import type { PageServerLoad, Actions } from './$types';
-import type { Torrent, TorrentStats, TorrentAction } from './types';
+import type { Torrent, MakeGetStatusRequestResult, TorrentInfo } from './types/_server';
+import { transformTorrentInfo } from './helpers/utils/_server';
+import { API_BASE_URL } from '$env/static/private';
+import { fail } from '@sveltejs/kit';
 
-const mockTorrents: Torrent[] = [
-	{
-		id: '1',
-		name: 'The.Matrix.1999.2160p.BluRay.x265-EXAMPLE',
-		size: '15.2 GB',
-		progress: 87,
-		downloadSpeed: '12.5 MB/s',
-		uploadSpeed: '2.1 MB/s',
-		status: 'downloading',
-		eta: '8m 32s',
-		peers: 24,
-		seeds: 156,
-		type: 'movie'
-	},
-	{
-		id: '2',
-		name: 'Breaking.Bad.S01.Complete.1080p.BluRay.x264-EXAMPLE',
-		size: '42.8 GB',
-		progress: 100,
-		downloadSpeed: '0 B/s',
-		uploadSpeed: '8.7 MB/s',
-		status: 'seeding',
-		eta: '∞',
-		peers: 12,
-		seeds: 89,
-		type: 'tv'
-	},
-	{
-		id: '3',
-		name: 'Inception.2010.4K.HDR.BluRay.x265-EXAMPLE',
-		size: '28.4 GB',
-		progress: 45,
-		downloadSpeed: '0 B/s',
-		uploadSpeed: '0 B/s',
-		status: 'paused',
-		eta: '∞',
-		peers: 0,
-		seeds: 67,
-		type: 'movie'
-	},
-	{
-		id: '4',
-		name: 'The.Office.US.Complete.Series.1080p.WEB-DL-EXAMPLE',
-		size: '156.7 GB',
-		progress: 23,
-		downloadSpeed: '5.8 MB/s',
-		uploadSpeed: '1.2 MB/s',
-		status: 'downloading',
-		eta: '4h 12m',
-		peers: 8,
-		seeds: 34,
-		type: 'tv'
-	}
-];
-
-let torrents = [...mockTorrents];
-
-function calculateStats(torrents: Torrent[]): TorrentStats {
-	const activeDownloads = torrents.filter((t) => t.status === 'downloading').length;
-	const totalDownloadSpeed = torrents
-		.filter((t) => t.status === 'downloading')
-		.reduce((acc, t) => acc + parseFloat(t.downloadSpeed.replace(/[^\d.]/g, '')), 0);
-
-	const seeding = torrents.filter((t) => t.status === 'seeding').length;
-	const totalUploadSpeed = torrents.reduce(
-		(acc, t) => acc + parseFloat(t.uploadSpeed.replace(/[^\d.]/g, '')),
-		0
-	);
-
-	const completed = torrents.filter(
-		(t) => t.status === 'completed' || t.status === 'seeding'
-	).length;
-	const averageProgress = Math.round(
-		torrents.reduce((acc, t) => acc + t.progress, 0) / torrents.length
-	);
-
-	return {
-		activeDownloads,
-		totalDownloadSpeed,
-		seeding,
-		totalUploadSpeed,
-		totalSize: '243.1 GB',
-		completed,
-		averageProgress
-	};
+let torrentsCache: Torrent[] = [];
+function getInMemoryCachedTorrents(): Torrent[] {
+	return [...torrentsCache]; // Return a copy to prevent external mutations
 }
 
-export const load: PageServerLoad = async () => {
-	return {
-		torrents,
-		stats: calculateStats(torrents)
-	};
+function updateInMemoryCacheTorrents(torrentsInfo: TorrentInfo[]): void {
+	const torrents = torrentsInfo.map(transformTorrentInfo);
+	torrentsCache = torrents;
+}
+
+async function makeGetStatusRequest(locals: App.Locals): Promise<MakeGetStatusRequestResult> {
+	const { security, session } = locals;
+	security.requireAuth(session);
+
+	try {
+		const response = await fetch(`${API_BASE_URL}/api/v1/torrent/status`, {
+			method: 'GET',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.token}`
+			}
+		});
+		const parsedResponse = await response.json();
+
+		if (!response.ok) {
+			console.error(parsedResponse);
+
+			return {
+				success: false,
+				error: {
+					status: response.status,
+					message: parsedResponse.message ?? 'Get status failed'
+				}
+			};
+		}
+
+		return {
+			success: true,
+			data: parsedResponse.torrents
+		};
+	} catch (error) {
+		console.error(error);
+
+		return {
+			success: false,
+			error: {
+				status: 500,
+				message: 'Get status failed'
+			}
+		};
+	}
+}
+
+export const load: PageServerLoad = async ({ locals }) => {
+	const makeGetStatusRequestResult = await makeGetStatusRequest(locals);
+
+	if (!makeGetStatusRequestResult.success) {
+		return fail(makeGetStatusRequestResult.error.status, {
+			success: false,
+			message: makeGetStatusRequestResult.error.message
+		});
+	}
+
+	const { data: torrentsInfo } = makeGetStatusRequestResult;
+	updateInMemoryCacheTorrents(torrentsInfo);
+
+	return { torrents: getInMemoryCachedTorrents() };
 };
 
 export const actions: Actions = {
@@ -100,20 +78,36 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const torrentId = data.get('torrentId') as string;
 
-		torrents = torrents.map((t) =>
+		// Optimistically update cache
+		torrentsCache = torrentsCache.map((t) =>
 			t.id === torrentId ? { ...t, status: t.status === 'paused' ? 'downloading' : 'paused' } : t
 		);
 
-		return { success: true };
+		// TODO: In a real implementation, you might want to make an API call to the backend
+		// to actually toggle the torrent status in qBittorrent
+		// For now, we're just updating the cache optimistically
+
+		return {
+			success: true,
+			torrents: torrentsCache
+		};
 	},
 
 	delete: async ({ request }) => {
 		const data = await request.formData();
 		const torrentId = data.get('torrentId') as string;
 
-		torrents = torrents.filter((t) => t.id !== torrentId);
+		// Optimistically update cache
+		torrentsCache = torrentsCache.filter((t) => t.id !== torrentId);
 
-		return { success: true };
+		// TODO: In a real implementation, you might want to make an API call to the backend
+		// to actually delete the torrent from qBittorrent
+		// For now, we're just updating the cache optimistically
+
+		return {
+			success: true,
+			torrents: torrentsCache
+		};
 	},
 
 	convert: async ({ request }) => {
@@ -127,52 +121,39 @@ export const actions: Actions = {
 		// 3. Optionally remove torrent based on deleteAfterConvert flag
 
 		if (deleteAfterConvert) {
-			// Remove the torrent if user opted to delete after conversion
-			torrents = torrents.filter((t) => t.id !== torrentId);
-			return { success: true, message: 'Torrent converted to Jellyfin format and deleted' };
+			// Optimistically remove the torrent if user opted to delete after conversion
+			torrentsCache = torrentsCache.filter((t) => t.id !== torrentId);
+			return {
+				success: true,
+				message: 'Torrent converted to Jellyfin format and deleted',
+				torrents: torrentsCache
+			};
 		} else {
-			// Keep the torrent but mark it as completed/seeding
-			torrents = torrents.map((t) =>
+			// Optimistically keep the torrent but mark it as completed/seeding
+			torrentsCache = torrentsCache.map((t) =>
 				t.id === torrentId ? { ...t, status: 'seeding' as const } : t
 			);
-			return { success: true, message: 'Torrent converted to Jellyfin format' };
+			return {
+				success: true,
+				message: 'Torrent converted to Jellyfin format',
+				torrents: torrentsCache
+			};
 		}
 	},
 
-	sync: async () => {
-		// Simulate sync by potentially updating some torrent data
-		// In a real app, this would call your Node.js backend which queries QBittorrent API
+	sync: async ({ locals }) => {
+		const makeGetStatusRequestResult = await makeGetStatusRequest(locals);
 
-		// For demo: randomly update progress on downloading torrents
-		torrents = torrents.map((torrent) => {
-			if (torrent.status === 'downloading' && torrent.progress < 100) {
-				const progressIncrease = Math.floor(Math.random() * 5) + 1; // 1-5% increase
-				const newProgress = Math.min(100, torrent.progress + progressIncrease);
+		if (!makeGetStatusRequestResult.success) {
+			return fail(makeGetStatusRequestResult.error.status, {
+				success: false,
+				message: makeGetStatusRequestResult.error.message
+			});
+		}
 
-				// If torrent completes, update status
-				if (newProgress === 100) {
-					return {
-						...torrent,
-						progress: newProgress,
-						status: 'completed' as const,
-						downloadSpeed: '0 B/s',
-						eta: '∞'
-					};
-				}
+		const { data: torrentsInfo } = makeGetStatusRequestResult;
+		updateInMemoryCacheTorrents(torrentsInfo);
 
-				return {
-					...torrent,
-					progress: newProgress,
-					// Slightly vary download speed for realism
-					downloadSpeed: `${(Math.random() * 5 + 8).toFixed(1)} MB/s`,
-					// Update ETA based on new progress
-					eta: newProgress > 95 ? '< 1m' : `${Math.floor(Math.random() * 30) + 5}m`
-				};
-			}
-
-			return torrent;
-		});
-
-		return { success: true, timestamp: Date.now() };
+		return { torrents: getInMemoryCachedTorrents() };
 	}
 };

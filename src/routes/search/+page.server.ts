@@ -13,7 +13,7 @@ import type {
 	MakeDownloadRequestResult,
 	SearchActionResponse,
 	DownloadActionResponse
-} from './types/server.types';
+} from './types/_server';
 
 export const actions = {
 	search: async ({ request, locals }): Promise<SearchActionResponse> => {

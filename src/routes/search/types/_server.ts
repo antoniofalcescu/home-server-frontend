@@ -1,4 +1,5 @@
 import type { ActionFailure } from '@sveltejs/kit';
+import type { GenericSuccessResult, GenericErrorResult, HttpError } from '$lib/types/common';
 
 export type ParsedSearchFormData = {
 	query: string;
@@ -15,21 +16,6 @@ export type TorrentDetails = {
 	size: number;
 	downloads: number;
 	date: Date;
-};
-
-type HttpError = {
-	status: number;
-	message: string;
-};
-
-type GenericSuccessResult<T> = {
-	success: true;
-	data: T;
-};
-
-type GenericErrorResult<T> = {
-	success: false;
-	error: T;
 };
 
 export type SearchActionData = {
@@ -68,5 +54,3 @@ export type SearchActionResponse =
 export type DownloadActionResponse =
 	| GenericSuccessResult<DownloadActionData>
 	| ActionFailure<{ success: false; error: string }>;
-
-
