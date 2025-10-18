@@ -37,17 +37,6 @@
 		}
 	}
 
-	function getTypeIcon(type: Torrent['type']) {
-		switch (type) {
-			case 'movie':
-				return '🎬';
-			case 'tv':
-				return '📺';
-			default:
-				return '💾';
-		}
-	}
-
 	function handleDeleteClick(torrent: Torrent) {
 		selectedTorrentForDelete = torrent;
 		deleteDialogOpen = true;
@@ -85,12 +74,13 @@
 		}
 	}
 
-	async function handleConvertConfirm(deleteAfterConvert: boolean) {
+	async function handleConvertConfirm(deleteAfterConvert: boolean, type: 'movie' | 'tvShow') {
 		if (!selectedTorrentForConvert) return;
 
 		const formData = new FormData();
 		formData.append('torrentId', selectedTorrentForConvert.id);
 		formData.append('deleteAfterConvert', deleteAfterConvert.toString());
+		formData.append('type', type);
 
 		try {
 			const response = await fetch('?/convert', {
@@ -135,7 +125,7 @@
 							: 'h-auto translate-x-0 scale-100 opacity-100'}"
 					>
 						<Table.Cell>
-							<span class="text-lg">{getTypeIcon(torrent.type)}</span>
+							<span class="text-lg">💾</span>
 						</Table.Cell>
 						<Table.Cell class="max-w-xs">
 							<div class="truncate font-medium">{torrent.name}</div>
@@ -153,8 +143,8 @@
 						</Table.Cell>
 						<Table.Cell class="text-right">
 							<div class="flex items-center justify-end gap-2">
-								<!-- Convert to Jellyfin (Primary CTA - only for completed movies/tv) -->
-								{#if (torrent.status === 'completed' || torrent.status === 'seeding') && (torrent.type === 'movie' || torrent.type === 'tv')}
+								<!-- Convert to Jellyfin (Primary CTA - only for completed or seeding torrents) -->
+								{#if torrent.status === 'completed' || torrent.status === 'seeding'}
 									<Button
 										variant="default"
 										size="icon"

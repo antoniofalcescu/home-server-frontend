@@ -114,9 +114,13 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const torrentId = data.get('torrentId') as string;
 		const deleteAfterConvert = data.get('deleteAfterConvert') === 'true';
+		const type = data.get('type');
+
+		// Log the type for now as requested
+		console.log('Torrent type:', type);
 
 		// In a real app, this would:
-		// 1. Move/copy files to Jellyfin directory
+		// 1. Move/copy files to Jellyfin directory based on type (movie/tvShow)
 		// 2. Update Jellyfin library
 		// 3. Optionally remove torrent based on deleteAfterConvert flag
 

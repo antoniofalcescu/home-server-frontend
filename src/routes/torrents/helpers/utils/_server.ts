@@ -31,7 +31,6 @@ function formatETA(seconds: number): string {
 function mapTorrentStatus(apiState: string): Torrent['status'] {
 	const stateLower = apiState.toLowerCase();
 
-	// Map qBittorrent states to our UI states
 	if (stateLower.includes('downloading') || stateLower.includes('stalledDL')) {
 		return 'downloading';
 	} else if (
@@ -40,40 +39,19 @@ function mapTorrentStatus(apiState: string): Torrent['status'] {
 		stateLower.includes('queuedUP')
 	) {
 		return 'seeding';
-	} else if (stateLower.includes('pausedDL') || stateLower.includes('pausedUP')) {
+	} else if (
+		stateLower.includes('pausedDL') ||
+		stateLower.includes('pausedUP') ||
+		stateLower.includes('stoppeddl')
+	) {
 		return 'paused';
 	} else if (stateLower.includes('completed')) {
 		return 'completed';
-	} else if (stateLower.includes('error')) {
+	} else if (stateLower.includes('error') || stateLower.includes('missingfiles')) {
 		return 'error';
 	} else {
-		return 'paused'; // Default fallback
+		return 'paused';
 	}
-}
-
-function detectContentType(name: string, path: string): Torrent['type'] {
-	const nameLower = name.toLowerCase();
-	const pathLower = path.toLowerCase();
-
-	// Check for TV series patterns
-	if (
-		nameLower.match(/s\d{2}e\d{2}|season|episode|complete.series/i) ||
-		pathLower.includes('/tv/') ||
-		pathLower.includes('/series/')
-	) {
-		return 'tv';
-	}
-
-	// Check for movie patterns
-	if (
-		nameLower.match(/\d{4}.*\.(bluray|webrip|dvdrip|hdtv)/i) ||
-		pathLower.includes('/movies/') ||
-		pathLower.includes('/films/')
-	) {
-		return 'movie';
-	}
-
-	return 'other';
 }
 
 export function transformTorrentInfo(apiTorrent: TorrentInfo): Torrent {
@@ -85,7 +63,6 @@ export function transformTorrentInfo(apiTorrent: TorrentInfo): Torrent {
 		downloadSpeed: formatSpeed(apiTorrent.status.downloadSpeed),
 		uploadSpeed: formatSpeed(apiTorrent.status.uploadSpeed),
 		status: mapTorrentStatus(apiTorrent.status.state),
-		eta: formatETA(apiTorrent.status.eta),
-		type: detectContentType(apiTorrent.name, apiTorrent.path)
+		eta: formatETA(apiTorrent.status.eta)
 	};
 }

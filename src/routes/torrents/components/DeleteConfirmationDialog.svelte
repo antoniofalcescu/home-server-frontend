@@ -2,8 +2,7 @@
 	import { AlertTriangle } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import { Badge } from '$lib/components/ui/badge';
-	import type { Torrent } from '../types';
+	import type { Torrent } from '../types/_server';
 
 	let {
 		open = $bindable(),
@@ -36,9 +35,7 @@
 		{#if torrent}
 			<div class="py-4">
 				<div class="bg-muted flex items-center gap-3 rounded-lg p-3">
-					<span class="text-lg">
-						{torrent.type === 'movie' ? '🎬' : torrent.type === 'tv' ? '📺' : '💾'}
-					</span>
+					<span class="text-lg">💾</span>
 					<div class="min-w-0 flex-1">
 						<p class="font-medium break-words">{torrent.name}</p>
 					</div>

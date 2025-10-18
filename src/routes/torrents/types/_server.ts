@@ -33,7 +33,6 @@ export type Torrent = {
 	uploadSpeed: string;
 	status: 'downloading' | 'seeding' | 'paused' | 'completed' | 'error';
 	eta: string;
-	type: 'movie' | 'tv' | 'other';
 };
 
 export type TorrentAction = {
