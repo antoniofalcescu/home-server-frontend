@@ -1,4 +1,5 @@
 import type { GenericErrorResult, GenericSuccessResult, HttpError } from '@/types/common';
+import type { TORRENT_STATUS } from '../constants/_server';
 
 // API Response types
 export type TorrentInfo = {
@@ -31,7 +32,7 @@ export type Torrent = {
 	progress: number;
 	downloadSpeed: string;
 	uploadSpeed: string;
-	status: 'downloading' | 'seeding' | 'paused' | 'completed' | 'error';
+	status: (typeof TORRENT_STATUS)[keyof typeof TORRENT_STATUS];
 	eta: string;
 };
 

@@ -1,3 +1,4 @@
+import { TORRENT_STATUS } from '../../constants/_server';
 import type { Torrent, TorrentInfo } from '../../types/_server';
 
 function formatBytes(bytes: number): string {
@@ -32,25 +33,25 @@ function mapTorrentStatus(apiState: string): Torrent['status'] {
 	const stateLower = apiState.toLowerCase();
 
 	if (stateLower.includes('downloading') || stateLower.includes('stalledDL')) {
-		return 'downloading';
+		return TORRENT_STATUS.DOWNLOADING;
 	} else if (
 		stateLower.includes('uploading') ||
 		stateLower.includes('stalledUP') ||
 		stateLower.includes('queuedUP')
 	) {
-		return 'seeding';
+		return TORRENT_STATUS.SEEDING;
 	} else if (
 		stateLower.includes('pausedDL') ||
 		stateLower.includes('pausedUP') ||
 		stateLower.includes('stoppeddl')
 	) {
-		return 'paused';
+		return TORRENT_STATUS.PAUSED;
 	} else if (stateLower.includes('completed')) {
-		return 'completed';
+		return TORRENT_STATUS.COMPLETED;
 	} else if (stateLower.includes('error') || stateLower.includes('missingfiles')) {
-		return 'error';
+		return TORRENT_STATUS.ERROR;
 	} else {
-		return 'paused';
+		return TORRENT_STATUS.ERROR;
 	}
 }
 

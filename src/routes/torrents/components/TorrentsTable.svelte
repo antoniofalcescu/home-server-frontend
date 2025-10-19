@@ -9,6 +9,7 @@
 	import * as Table from '$lib/components/ui/table';
 	import { DeleteConfirmationDialog, ConvertConfirmationDialog } from './index';
 	import type { Torrent } from '../types/_server';
+	import { TORRENT_STATUS } from '../constants/_server';
 
 	// TODO: check the existing code and look for ways to refactor it and simplify it
 	const { torrents, onShowInfo }: { torrents: Torrent[]; onShowInfo: (torrent: Torrent) => void } =
@@ -19,6 +20,43 @@
 	let selectedTorrentForDelete: Torrent | null = $state(null);
 	let selectedTorrentForConvert: Torrent | null = $state(null);
 	let deletingTorrentId: string | null = $state(null);
+
+	// Animation timing constants
+	const ANIMATION_DURATION_MS = 400;
+	const HIDE_DELAY_MS = 380; // slightly less so hide occurs right after fade completes
+
+	// Track which rows are hidden from the DOM after the fade completes
+	let hiddenTorrentIds: Set<string> = $state(new Set<string>());
+
+	function isDeletingRow(torrentId: string) {
+		return deletingTorrentId === torrentId;
+	}
+
+	function getRowClass(torrentId: string) {
+		return `transition-all duration-400 ease-out ${
+			isDeletingRow(torrentId)
+				? 'translate-x-6 scale-90 opacity-0'
+				: 'translate-x-0 scale-100 opacity-100'
+		}`;
+	}
+
+	function getRowStyle(torrentId: string) {
+		return isDeletingRow(torrentId)
+			? 'max-height: 0; overflow: hidden; padding-top: 0; padding-bottom: 0;'
+			: 'max-height: 200px;';
+	}
+
+	function getCellStyle(torrentId: string) {
+		return isDeletingRow(torrentId) ? 'padding-top: 0; padding-bottom: 0; line-height: 0;' : '';
+	}
+
+	function hideRowAfterAnimation(torrentId: string) {
+		setTimeout(() => {
+			const next = new Set(hiddenTorrentIds);
+			next.add(torrentId);
+			hiddenTorrentIds = next;
+		}, HIDE_DELAY_MS);
+	}
 
 	function getStatusBadgeVariant(status: Torrent['status']) {
 		switch (status) {
@@ -53,6 +91,9 @@
 		// Start deletion animation
 		deletingTorrentId = selectedTorrentForDelete.id;
 
+		// After fade completes, remove from the rendered list so rows shift up
+		hideRowAfterAnimation(selectedTorrentForDelete.id);
+
 		// Submit the delete form immediately
 		const formData = new FormData();
 		formData.append('torrentId', selectedTorrentForDelete.id);
@@ -65,11 +106,15 @@
 
 			if (response.ok) {
 				// Wait for animation to complete, then refresh
-				await new Promise((resolve) => setTimeout(resolve, 400));
+				await new Promise((resolve) => setTimeout(resolve, ANIMATION_DURATION_MS));
 				await invalidateAll(); // Refresh to update the data
 			}
 		} catch (error) {
 			console.error('Delete failed:', error);
+			// Roll back hidden state on error
+			const next = new Set(hiddenTorrentIds);
+			next.delete(selectedTorrentForDelete.id);
+			hiddenTorrentIds = next;
 			deletingTorrentId = null; // Reset animation state on error
 		}
 	}
@@ -92,12 +137,20 @@
 				if (deleteAfterConvert) {
 					// Start deletion animation if deleting after convert
 					deletingTorrentId = selectedTorrentForConvert.id;
-					await new Promise((resolve) => setTimeout(resolve, 400));
+					hideRowAfterAnimation(selectedTorrentForConvert.id);
+					await new Promise((resolve) => setTimeout(resolve, ANIMATION_DURATION_MS));
 				}
 				await invalidateAll(); // Refresh to update the data
 			}
 		} catch (error) {
 			console.error('Convert failed:', error);
+			if (deleteAfterConvert) {
+				// Roll back hidden state on error
+				const next = new Set(hiddenTorrentIds);
+				next.delete(selectedTorrentForConvert.id);
+				hiddenTorrentIds = next;
+				deletingTorrentId = null;
+			}
 		}
 	}
 </script>
@@ -118,33 +171,29 @@
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
-				{#each torrents as torrent (torrent.id)}
-					<Table.Row
-						class="transition-all duration-400 ease-out {deletingTorrentId === torrent.id
-							? 'h-0 translate-x-6 scale-90 overflow-hidden opacity-0'
-							: 'h-auto translate-x-0 scale-100 opacity-100'}"
-					>
-						<Table.Cell>
+				{#each torrents.filter((t) => !hiddenTorrentIds.has(t.id)) as torrent (torrent.id)}
+					<Table.Row class={getRowClass(torrent.id)} style={getRowStyle(torrent.id)}>
+						<Table.Cell style={getCellStyle(torrent.id)}>
 							<span class="text-lg">💾</span>
 						</Table.Cell>
-						<Table.Cell class="max-w-xs">
+						<Table.Cell class="max-w-xs" style={getCellStyle(torrent.id)}>
 							<div class="truncate font-medium">{torrent.name}</div>
 						</Table.Cell>
-						<Table.Cell>
+						<Table.Cell style={getCellStyle(torrent.id)}>
 							<Badge variant={getStatusBadgeVariant(torrent.status)}>
 								{torrent.status}
 							</Badge>
 						</Table.Cell>
-						<Table.Cell class="w-1/3">
+						<Table.Cell class="w-1/3" style={getCellStyle(torrent.id)}>
 							<div class="flex items-center gap-2">
 								<Progress value={torrent.progress} class="h-2 flex-1" />
 								<span class="min-w-[3rem] text-sm font-medium">{torrent.progress}%</span>
 							</div>
 						</Table.Cell>
-						<Table.Cell class="text-right">
+						<Table.Cell class="text-right" style={getCellStyle(torrent.id)}>
 							<div class="flex items-center justify-end gap-2">
 								<!-- Convert to Jellyfin (Primary CTA - only for completed or seeding torrents) -->
-								{#if torrent.status === 'completed' || torrent.status === 'seeding'}
+								{#if torrent.status === TORRENT_STATUS.COMPLETED || torrent.status === TORRENT_STATUS.SEEDING || torrent.status === TORRENT_STATUS.ERROR}
 									<Button
 										variant="default"
 										size="icon"

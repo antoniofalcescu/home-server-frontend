@@ -22,23 +22,32 @@
 	let selectedType = $state<TorrentType | undefined>(undefined);
 	let showValidation = $state(false);
 
+	function resetState() {
+		deleteAfterConvert = false;
+		selectedType = undefined;
+		showValidation = false;
+	}
+
+	function handleOpenChange(isOpen: boolean) {
+		open = isOpen;
+		if (!isOpen) {
+			resetState();
+		}
+	}
+
 	function handleConfirm() {
 		if (!selectedType) {
 			showValidation = true; // Show validation error
 			return; // Don't confirm if type is not selected
 		}
 		onConfirm(deleteAfterConvert, selectedType);
+		resetState();
 		open = false;
-		deleteAfterConvert = false; // Reset for next time
-		selectedType = undefined; // Reset for next time
-		showValidation = false; // Reset validation state
 	}
 
 	function handleCancel() {
+		resetState();
 		open = false;
-		deleteAfterConvert = false; // Reset for next time
-		selectedType = undefined; // Reset for next time
-		showValidation = false; // Reset validation state
 	}
 
 	function getTypeLabel(type: TorrentType | undefined): string {
@@ -48,7 +57,7 @@
 	}
 </script>
 
-<Dialog.Root bind:open>
+<Dialog.Root {open} onOpenChange={handleOpenChange}>
 	<Dialog.Content class="max-w-lg">
 		<Dialog.Header>
 			<Dialog.Title class="text-primary flex items-center gap-2">
