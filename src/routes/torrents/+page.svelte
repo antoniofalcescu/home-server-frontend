@@ -16,6 +16,8 @@
 	let selectedTorrent: Torrent | null = $state(null);
 	let dialogOpen = $state(false);
 	let isSyncing = $state(false);
+	let tableRef: { animateRowDeletions: (ids: string[]) => void } | null = null;
+	let currentIds = new Set<string>(data.torrents.map((t) => t.id));
 
 	onMount(() => {
 		const lastSyncCounterInterval = setInterval(() => {
@@ -49,6 +51,16 @@
 
 			if (response.ok) {
 				await invalidateAll();
+				// After data reload, diff IDs and animate deletions
+				const nextIds = new Set<string>(data.torrents.map((t) => t.id));
+				const removed: string[] = [];
+				currentIds.forEach((id) => {
+					if (!nextIds.has(id)) removed.push(id);
+				});
+				if (removed.length && tableRef) {
+					tableRef.animateRowDeletions(removed);
+				}
+				currentIds = nextIds;
 			}
 		} catch (error) {
 			console.error('Sync failed:', error);
@@ -82,7 +94,11 @@
 			</div>
 		</div>
 
-		<TorrentsTable torrents={data.torrents} onShowInfo={handleShowTorrentInfo} />
+		<TorrentsTable
+			bind:this={tableRef}
+			torrents={data.torrents}
+			onShowInfo={handleShowTorrentInfo}
+		/>
 	</div>
 </div>
 

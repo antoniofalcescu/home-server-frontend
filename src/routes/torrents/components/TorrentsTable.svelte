@@ -19,17 +19,19 @@
 	let convertDialogOpen = $state(false);
 	let selectedTorrentForDelete: Torrent | null = $state(null);
 	let selectedTorrentForConvert: Torrent | null = $state(null);
-	let deletingTorrentId: string | null = $state(null);
+	let visibleTorrents: Torrent[] = $state(torrents);
+	let deletingTorrentIds: Set<string> = $state(new Set<string>());
 
 	// Animation timing constants
 	const ANIMATION_DURATION_MS = 400;
 	const HIDE_DELAY_MS = 380; // slightly less so hide occurs right after fade completes
+	const ROW_MAX_HEIGHT = 200;
 
 	// Track which rows are hidden from the DOM after the fade completes
 	let hiddenTorrentIds: Set<string> = $state(new Set<string>());
 
 	function isDeletingRow(torrentId: string) {
-		return deletingTorrentId === torrentId;
+		return deletingTorrentIds.has(torrentId);
 	}
 
 	function getRowClass(torrentId: string) {
@@ -43,18 +45,25 @@
 	function getRowStyle(torrentId: string) {
 		return isDeletingRow(torrentId)
 			? 'max-height: 0; overflow: hidden; padding-top: 0; padding-bottom: 0;'
-			: 'max-height: 200px;';
+			: `max-height: ${ROW_MAX_HEIGHT}px;`;
 	}
 
 	function getCellStyle(torrentId: string) {
 		return isDeletingRow(torrentId) ? 'padding-top: 0; padding-bottom: 0; line-height: 0;' : '';
 	}
 
-	function hideRowAfterAnimation(torrentId: string) {
+	export function animateRowDeletions(ids: string[]) {
+		if (!ids || ids.length === 0) {
+			return;
+		}
+
+		const nextDeleting = new Set(deletingTorrentIds);
+		ids.forEach((id) => nextDeleting.add(id));
+		deletingTorrentIds = nextDeleting;
 		setTimeout(() => {
-			const next = new Set(hiddenTorrentIds);
-			next.add(torrentId);
-			hiddenTorrentIds = next;
+			const hidden = new Set(hiddenTorrentIds);
+			ids.forEach((id) => hidden.add(id));
+			hiddenTorrentIds = hidden;
 		}, HIDE_DELAY_MS);
 	}
 
@@ -89,10 +98,7 @@
 		if (!selectedTorrentForDelete) return;
 
 		// Start deletion animation
-		deletingTorrentId = selectedTorrentForDelete.id;
-
-		// After fade completes, remove from the rendered list so rows shift up
-		hideRowAfterAnimation(selectedTorrentForDelete.id);
+		animateRowDeletions([selectedTorrentForDelete.id]);
 
 		// Submit the delete form immediately
 		const formData = new FormData();
@@ -112,10 +118,12 @@
 		} catch (error) {
 			console.error('Delete failed:', error);
 			// Roll back hidden state on error
-			const next = new Set(hiddenTorrentIds);
-			next.delete(selectedTorrentForDelete.id);
-			hiddenTorrentIds = next;
-			deletingTorrentId = null; // Reset animation state on error
+			const hidden = new Set(hiddenTorrentIds);
+			hidden.delete(selectedTorrentForDelete.id);
+			hiddenTorrentIds = hidden;
+			const deleting = new Set(deletingTorrentIds);
+			deleting.delete(selectedTorrentForDelete.id);
+			deletingTorrentIds = deleting;
 		}
 	}
 
@@ -136,8 +144,7 @@
 			if (response.ok) {
 				if (deleteAfterConvert) {
 					// Start deletion animation if deleting after convert
-					deletingTorrentId = selectedTorrentForConvert.id;
-					hideRowAfterAnimation(selectedTorrentForConvert.id);
+					animateRowDeletions([selectedTorrentForConvert.id]);
 					await new Promise((resolve) => setTimeout(resolve, ANIMATION_DURATION_MS));
 				}
 				await invalidateAll(); // Refresh to update the data
@@ -146,10 +153,12 @@
 			console.error('Convert failed:', error);
 			if (deleteAfterConvert) {
 				// Roll back hidden state on error
-				const next = new Set(hiddenTorrentIds);
-				next.delete(selectedTorrentForConvert.id);
-				hiddenTorrentIds = next;
-				deletingTorrentId = null;
+				const hidden = new Set(hiddenTorrentIds);
+				hidden.delete(selectedTorrentForConvert.id);
+				hiddenTorrentIds = hidden;
+				const deleting = new Set(deletingTorrentIds);
+				deleting.delete(selectedTorrentForConvert.id);
+				deletingTorrentIds = deleting;
 			}
 		}
 	}
@@ -171,7 +180,7 @@
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
-				{#each torrents.filter((t) => !hiddenTorrentIds.has(t.id)) as torrent (torrent.id)}
+				{#each visibleTorrents.filter((t) => !hiddenTorrentIds.has(t.id)) as torrent (torrent.id)}
 					<Table.Row class={getRowClass(torrent.id)} style={getRowStyle(torrent.id)}>
 						<Table.Cell style={getCellStyle(torrent.id)}>
 							<span class="text-lg">💾</span>

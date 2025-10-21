@@ -2,7 +2,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Progress } from '$lib/components/ui/progress';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import type { Torrent } from '../types';
+	import type { Torrent } from '../types/_server';
 
 	export let open: boolean = false;
 	export let torrent: Torrent | null = null;
@@ -21,17 +21,6 @@
 				return 'destructive';
 			default:
 				return 'outline';
-		}
-	}
-
-	function getTypeIcon(type: Torrent['type']) {
-		switch (type) {
-			case 'movie':
-				return '🎬';
-			case 'tv':
-				return '📺';
-			default:
-				return '💾';
 		}
 	}
 </script>
@@ -60,13 +49,6 @@
 						<Badge variant={getStatusBadgeVariant(torrent.status)}>
 							{torrent.status}
 						</Badge>
-					</div>
-					<div class="space-y-2">
-						<h3 class="text-muted-foreground text-sm font-semibold">Type</h3>
-						<div class="flex items-center gap-2">
-							<span class="text-lg">{getTypeIcon(torrent.type)}</span>
-							<span class="text-sm capitalize">{torrent.type}</span>
-						</div>
 					</div>
 				</div>
 
