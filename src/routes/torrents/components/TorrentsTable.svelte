@@ -202,7 +202,7 @@
 						<Table.Cell class="text-right" style={getCellStyle(torrent.id)}>
 							<div class="flex items-center justify-end gap-2">
 								<!-- Convert to Jellyfin (Primary CTA - only for completed or seeding torrents) -->
-								{#if torrent.status === TORRENT_STATUS.COMPLETED || torrent.status === TORRENT_STATUS.SEEDING || torrent.status === TORRENT_STATUS.ERROR}
+								{#if torrent.status === TORRENT_STATUS.COMPLETED || torrent.status === TORRENT_STATUS.SEEDING}
 									<Button
 										variant="default"
 										size="icon"
@@ -215,22 +215,44 @@
 								{/if}
 
 								<!-- Toggle Play/Pause -->
-								<form method="POST" action="?/toggle" use:enhance>
-									<input type="hidden" name="torrentId" value={torrent.id} />
-									<Button
-										variant="ghost"
-										size="icon"
-										type="submit"
-										class="h-8 w-8"
-										title={torrent.status === 'paused' ? 'Resume torrent' : 'Pause torrent'}
+								{#if torrent.status !== TORRENT_STATUS.ERROR}
+									<form
+										method="POST"
+										action="?/toggle"
+										use:enhance={({ formData }) => {
+											// Derive desired state without a hidden input
+											const nextState = torrent.status === 'paused' ? 'play' : 'pause';
+											formData.set('state', nextState);
+
+											return async ({ result }) => {
+												if (result.type === 'success') {
+													// Apply change only after success
+													visibleTorrents = visibleTorrents.map((t) => {
+														if (t.id !== torrent.id) return t;
+														if (nextState === 'pause') return { ...t, status: 'paused' };
+														const keep = t.status === 'completed' || t.status === 'seeding';
+														return { ...t, status: keep ? t.status : 'downloading' };
+													});
+												}
+											};
+										}}
 									>
-										{#if torrent.status === 'paused'}
-											<Play class="h-4 w-4" />
-										{:else}
-											<Pause class="h-4 w-4" />
-										{/if}
-									</Button>
-								</form>
+										<input type="hidden" name="torrentId" value={torrent.id} />
+										<Button
+											variant="ghost"
+											size="icon"
+											type="submit"
+											class="h-8 w-8"
+											title={torrent.status === 'paused' ? 'Resume torrent' : 'Pause torrent'}
+										>
+											{#if torrent.status === 'paused'}
+												<Play class="h-4 w-4" />
+											{:else}
+												<Pause class="h-4 w-4" />
+											{/if}
+										</Button>
+									</form>
+								{/if}
 
 								<!-- Info Button -->
 								<Button

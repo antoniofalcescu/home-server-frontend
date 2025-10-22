@@ -74,23 +74,55 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 export const actions: Actions = {
-	toggle: async ({ request }) => {
+	toggle: async ({ request, locals }) => {
 		const data = await request.formData();
 		const torrentId = data.get('torrentId') as string;
+		const state = (data.get('state') as string) ?? '';
 
-		// Optimistically update cache
-		torrentsCache = torrentsCache.map((t) =>
-			t.id === torrentId ? { ...t, status: t.status === 'paused' ? 'downloading' : 'paused' } : t
-		);
+		const { security, session } = locals;
+		security.requireAuth(session);
 
-		// TODO: In a real implementation, you might want to make an API call to the backend
-		// to actually toggle the torrent status in qBittorrent
-		// For now, we're just updating the cache optimistically
+		if (!torrentId || (state !== 'play' && state !== 'pause')) {
+			return fail(400, {
+				success: false,
+				message: 'Invalid request'
+			});
+		}
 
-		return {
-			success: true,
-			torrents: torrentsCache
-		};
+		const endpoint = state === 'pause' ? 'pause' : 'resume';
+		const url = `${API_BASE_URL}/api/v1/torrent/${endpoint}/${torrentId}`;
+
+		try {
+			const response = await fetch(url, {
+				method: 'POST',
+				headers: {
+					Authorization: `Bearer ${session.token}`
+				}
+			});
+
+			if (!response.ok) {
+				const parsed = await response.json().catch(() => ({}));
+				return fail(response.status, {
+					success: false,
+					message: parsed.message ?? 'Toggle torrent failed'
+				});
+			}
+
+			// Update cache to reflect new state
+			torrentsCache = torrentsCache.map((t) => {
+				if (t.id !== torrentId) return t;
+				if (state === 'pause') return { ...t, status: 'paused' } as Torrent;
+				// play => resume: if previously completed/seeding keep it, otherwise mark downloading
+				const nextStatus =
+					t.status === 'completed' || t.status === 'seeding' ? t.status : 'downloading';
+				return { ...t, status: nextStatus } as Torrent;
+			});
+
+			return { success: true, torrents: torrentsCache };
+		} catch (error) {
+			console.error(error);
+			return fail(500, { success: false, message: 'Toggle torrent failed' });
+		}
 	},
 
 	delete: async ({ request }) => {
@@ -157,6 +189,9 @@ export const actions: Actions = {
 
 		const { data: torrentsInfo } = makeGetStatusRequestResult;
 		updateInMemoryCacheTorrents(torrentsInfo);
+
+		console.log('Raw torrents info:', torrentsInfo);
+		console.log('Cached torrents:', getInMemoryCachedTorrents());
 
 		return { torrents: getInMemoryCachedTorrents() };
 	}
