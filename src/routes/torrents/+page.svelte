@@ -67,12 +67,10 @@
 		if (isSyncing) return;
 
 		isSyncing = true;
-
 		try {
-			const formData = new FormData();
 			const response = await fetch('?/sync', {
 				method: 'POST',
-				body: formData
+				body: new FormData()
 			});
 
 			if (response.ok) {
@@ -82,7 +80,6 @@
 					const payload = (await response.json()) as { torrents?: Torrent[] };
 					if (payload?.torrents) {
 						setFromList(payload.torrents);
-						currentIds = new Set<string>(payload.torrents.map((t) => t.id));
 						usedPayload = true;
 					}
 				} catch {}
@@ -90,7 +87,6 @@
 				if (!usedPayload) {
 					await invalidateAll();
 					setFromList(data.torrents);
-					currentIds = new Set<string>(data.torrents.map((t) => t.id));
 				}
 
 				// Fresh data received -> reset counter and next schedule
