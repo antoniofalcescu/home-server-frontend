@@ -69,8 +69,7 @@
 		isSyncing = true;
 		try {
 			const response = await fetch('?/sync', {
-				method: 'POST',
-				body: new FormData()
+				method: 'POST'
 			});
 
 			if (response.ok) {
