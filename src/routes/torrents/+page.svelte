@@ -28,7 +28,6 @@
 	let dialogOpen = $state(false);
 	let isSyncing = $state(false);
 	let tableRef: { animateRowDeletions: (ids: string[]) => void } | null = null;
-	let currentIds = new Set<string>(data.torrents.map((t) => t.id));
 	let tickerIntervalId: number | null = null;
 	let nextSyncAt = $state(Date.now() + AUTO_SYNC_INTERVAL_IN_SECONDS * 1000);
 
@@ -69,7 +68,8 @@
 		isSyncing = true;
 		try {
 			const response = await fetch('?/sync', {
-				method: 'POST'
+				method: 'POST',
+				body: new FormData()
 			});
 
 			if (response.ok) {
