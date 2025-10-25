@@ -108,17 +108,11 @@ export const actions: Actions = {
 				});
 			}
 
-			// Update cache to reflect new state
-			torrentsCache = torrentsCache.map((t) => {
-				if (t.id !== torrentId) return t;
-				if (state === 'pause') return { ...t, status: 'paused' } as Torrent;
-				// play => resume: if previously completed/seeding keep it, otherwise mark downloading
-				const nextStatus =
-					t.status === 'completed' || t.status === 'seeding' ? t.status : 'downloading';
-				return { ...t, status: nextStatus } as Torrent;
-			});
+			const torrents = getInMemoryCachedTorrents();
+			const updatedTorrent = torrents.find((t) => t.id === torrentId)!;
+			updatedTorrent.status = state === 'pause' ? 'paused' : 'downloading';
 
-			return { success: true, torrents: torrentsCache };
+			return { success: true, torrent: updatedTorrent };
 		} catch (error) {
 			console.error(error);
 			return fail(500, { success: false, message: 'Toggle torrent failed' });
@@ -189,9 +183,6 @@ export const actions: Actions = {
 
 		const { data: torrentsInfo } = makeGetStatusRequestResult;
 		updateInMemoryCacheTorrents(torrentsInfo);
-
-		console.log('Raw torrents info:', torrentsInfo);
-		console.log('Cached torrents:', getInMemoryCachedTorrents());
 
 		return { torrents: getInMemoryCachedTorrents() };
 	}

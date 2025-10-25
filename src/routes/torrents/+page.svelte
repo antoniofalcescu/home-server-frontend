@@ -10,7 +10,18 @@
 
 	const { data }: { data: PageData & { torrents: Torrent[] } } = $props();
 
-	const AUTO_SYNC_INTERVAL_IN_SECONDS = 10;
+	// Normalized torrents for efficient per-row updates
+	let torrentsIds = $state<string[]>([]);
+	let torrentById = $state<Record<string, Torrent>>({});
+
+	function setFromList(list: Torrent[]) {
+		torrentsIds = list.map((t) => t.id);
+		const next: Record<string, Torrent> = {};
+		for (const t of list) next[t.id] = t;
+		torrentById = next;
+	}
+
+	const AUTO_SYNC_INTERVAL_IN_SECONDS = 100000;
 
 	let lastSynced = $state(0);
 	let selectedTorrent: Torrent | null = $state(null);
@@ -18,21 +29,37 @@
 	let isSyncing = $state(false);
 	let tableRef: { animateRowDeletions: (ids: string[]) => void } | null = null;
 	let currentIds = new Set<string>(data.torrents.map((t) => t.id));
+	let tickerIntervalId: number | null = null;
+	let nextSyncAt = $state(Date.now() + AUTO_SYNC_INTERVAL_IN_SECONDS * 1000);
 
 	onMount(() => {
-		const lastSyncCounterInterval = setInterval(() => {
-			lastSynced += 1;
-		}, 1000);
+		// Initialize normalized state on first mount
+		setFromList(data.torrents);
+		function shouldSync() {
+			return document.visibilityState === 'visible' && !isSyncing && Date.now() >= nextSyncAt;
+		}
 
-		const autoSyncTimerInterval = setInterval(() => {
-			if (document.visibilityState === 'visible' && !isSyncing) {
-				handleSync();
+		function tick() {
+			if (document.visibilityState === 'visible') {
+				lastSynced += 1;
 			}
-		}, AUTO_SYNC_INTERVAL_IN_SECONDS * 1000);
+			if (shouldSync()) {
+				void handleSync();
+			}
+		}
+
+		tickerIntervalId = window.setInterval(tick, 1000);
+
+		const onVisibilityChange = () => {
+			if (shouldSync()) {
+				void handleSync();
+			}
+		};
+		document.addEventListener('visibilitychange', onVisibilityChange);
 
 		return () => {
-			clearInterval(lastSyncCounterInterval);
-			clearInterval(autoSyncTimerInterval);
+			if (tickerIntervalId !== null) clearInterval(tickerIntervalId);
+			document.removeEventListener('visibilitychange', onVisibilityChange);
 		};
 	});
 
@@ -40,7 +67,6 @@
 		if (isSyncing) return;
 
 		isSyncing = true;
-		lastSynced = 0;
 
 		try {
 			const formData = new FormData();
@@ -50,17 +76,26 @@
 			});
 
 			if (response.ok) {
-				await invalidateAll();
-				// After data reload, diff IDs and animate deletions
-				const nextIds = new Set<string>(data.torrents.map((t) => t.id));
-				const removed: string[] = [];
-				currentIds.forEach((id) => {
-					if (!nextIds.has(id)) removed.push(id);
-				});
-				if (removed.length && tableRef) {
-					tableRef.animateRowDeletions(removed);
+				// Prefer using action payload if present to update immediately
+				let usedPayload = false;
+				try {
+					const payload = (await response.json()) as { torrents?: Torrent[] };
+					if (payload?.torrents) {
+						setFromList(payload.torrents);
+						currentIds = new Set<string>(payload.torrents.map((t) => t.id));
+						usedPayload = true;
+					}
+				} catch {}
+
+				if (!usedPayload) {
+					await invalidateAll();
+					setFromList(data.torrents);
+					currentIds = new Set<string>(data.torrents.map((t) => t.id));
 				}
-				currentIds = nextIds;
+
+				// Fresh data received -> reset counter and next schedule
+				lastSynced = 0;
+				nextSyncAt = Date.now() + AUTO_SYNC_INTERVAL_IN_SECONDS * 1000;
 			}
 		} catch (error) {
 			console.error('Sync failed:', error);
@@ -72,6 +107,19 @@
 	function handleShowTorrentInfo(torrent: Torrent) {
 		selectedTorrent = torrent;
 		dialogOpen = true;
+	}
+
+	function handleToggleSuccess(updated: Torrent) {
+		if (!torrentById[updated.id]) return;
+		torrentById = { ...torrentById, [updated.id]: updated };
+	}
+
+	function handleDeleteSuccess(id: string) {
+		if (!torrentById[id]) return;
+		// Remove from byId and ids without a global reload
+		const { [id]: _omit, ...rest } = torrentById;
+		torrentById = rest;
+		torrentsIds = torrentsIds.filter((x) => x !== id);
 	}
 </script>
 
@@ -96,8 +144,11 @@
 
 		<TorrentsTable
 			bind:this={tableRef}
-			torrents={data.torrents}
+			{torrentsIds}
+			{torrentById}
 			onShowInfo={handleShowTorrentInfo}
+			onToggleSuccess={handleToggleSuccess}
+			onDeleteSuccess={handleDeleteSuccess}
 		/>
 	</div>
 </div>

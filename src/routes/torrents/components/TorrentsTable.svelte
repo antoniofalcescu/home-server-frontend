@@ -12,14 +12,24 @@
 	import { TORRENT_STATUS } from '../constants/_server';
 
 	// TODO: check the existing code and look for ways to refactor it and simplify it
-	const { torrents, onShowInfo }: { torrents: Torrent[]; onShowInfo: (torrent: Torrent) => void } =
-		$props();
+	const {
+		torrentsIds: ids,
+		torrentById: byId,
+		onShowInfo,
+		onToggleSuccess,
+		onDeleteSuccess
+	}: {
+		torrentsIds: string[];
+		torrentById: Record<string, Torrent>;
+		onShowInfo: (torrent: Torrent) => void;
+		onToggleSuccess: (torrent: Torrent) => void;
+		onDeleteSuccess: (id: string) => void;
+	} = $props();
 
 	let deleteDialogOpen = $state(false);
 	let convertDialogOpen = $state(false);
 	let selectedTorrentForDelete: Torrent | null = $state(null);
 	let selectedTorrentForConvert: Torrent | null = $state(null);
-	let visibleTorrents: Torrent[] = $state(torrents);
 	let deletingTorrentIds: Set<string> = $state(new Set<string>());
 
 	// Animation timing constants
@@ -29,6 +39,11 @@
 
 	// Track which rows are hidden from the DOM after the fade completes
 	let hiddenTorrentIds: Set<string> = $state(new Set<string>());
+
+	// --- Helpers --------------------------------------------------------------
+	function getRow(id: string): Torrent | null {
+		return byId[id] ?? null;
+	}
 
 	function isDeletingRow(torrentId: string) {
 		return deletingTorrentIds.has(torrentId);
@@ -65,6 +80,11 @@
 			ids.forEach((id) => hidden.add(id));
 			hiddenTorrentIds = hidden;
 		}, HIDE_DELAY_MS);
+
+		// After animation completes, inform parent to remove rows
+		setTimeout(() => {
+			ids.forEach((id) => onDeleteSuccess(id));
+		}, ANIMATION_DURATION_MS + 20);
 	}
 
 	function getStatusBadgeVariant(status: Torrent['status']) {
@@ -180,104 +200,102 @@
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
-				{#each visibleTorrents.filter((t) => !hiddenTorrentIds.has(t.id)) as torrent (torrent.id)}
-					<Table.Row class={getRowClass(torrent.id)} style={getRowStyle(torrent.id)}>
-						<Table.Cell style={getCellStyle(torrent.id)}>
-							<span class="text-lg">💾</span>
-						</Table.Cell>
-						<Table.Cell class="max-w-xs" style={getCellStyle(torrent.id)}>
-							<div class="truncate font-medium">{torrent.name}</div>
-						</Table.Cell>
-						<Table.Cell style={getCellStyle(torrent.id)}>
-							<Badge variant={getStatusBadgeVariant(torrent.status)}>
-								{torrent.status}
-							</Badge>
-						</Table.Cell>
-						<Table.Cell class="w-1/3" style={getCellStyle(torrent.id)}>
-							<div class="flex items-center gap-2">
-								<Progress value={torrent.progress} class="h-2 flex-1" />
-								<span class="min-w-[3rem] text-sm font-medium">{torrent.progress}%</span>
-							</div>
-						</Table.Cell>
-						<Table.Cell class="text-right" style={getCellStyle(torrent.id)}>
-							<div class="flex items-center justify-end gap-2">
-								<!-- Convert to Jellyfin (Primary CTA - only for completed or seeding torrents) -->
-								{#if torrent.status === TORRENT_STATUS.COMPLETED || torrent.status === TORRENT_STATUS.SEEDING}
-									<Button
-										variant="default"
-										size="icon"
-										onclick={() => handleConvertClick(torrent)}
-										class="h-8 w-8"
-										title="Convert to Jellyfin"
-									>
-										<Monitor class="h-4 w-4" />
-									</Button>
-								{/if}
-
-								<!-- Toggle Play/Pause -->
-								{#if torrent.status !== TORRENT_STATUS.ERROR}
-									<form
-										method="POST"
-										action="?/toggle"
-										use:enhance={({ formData }) => {
-											// Derive desired state without a hidden input
-											const nextState = torrent.status === 'paused' ? 'play' : 'pause';
-											formData.set('state', nextState);
-
-											return async ({ result }) => {
-												if (result.type === 'success') {
-													// Apply change only after success
-													visibleTorrents = visibleTorrents.map((t) => {
-														if (t.id !== torrent.id) return t;
-														if (nextState === 'pause') return { ...t, status: 'paused' };
-														const keep = t.status === 'completed' || t.status === 'seeding';
-														return { ...t, status: keep ? t.status : 'downloading' };
-													});
-												}
-											};
-										}}
-									>
-										<input type="hidden" name="torrentId" value={torrent.id} />
+				{#each ids as id (id)}
+					{@const torrent = getRow(id)}
+					{#if torrent && !hiddenTorrentIds.has(torrent.id)}
+						<Table.Row class={getRowClass(torrent.id)} style={getRowStyle(torrent.id)}>
+							<Table.Cell style={getCellStyle(torrent.id)}>
+								<span class="text-lg">💾</span>
+							</Table.Cell>
+							<Table.Cell class="max-w-xs" style={getCellStyle(torrent.id)}>
+								<div class="truncate font-medium">{torrent.name}</div>
+							</Table.Cell>
+							<Table.Cell style={getCellStyle(torrent.id)}>
+								<Badge variant={getStatusBadgeVariant(torrent.status)}>
+									{torrent.status}
+								</Badge>
+							</Table.Cell>
+							<Table.Cell class="w-1/3" style={getCellStyle(torrent.id)}>
+								<div class="flex items-center gap-2">
+									<Progress value={torrent.progress} class="h-2 flex-1" />
+									<span class="min-w-[3rem] text-sm font-medium">{torrent.progress}%</span>
+								</div>
+							</Table.Cell>
+							<Table.Cell class="text-right" style={getCellStyle(torrent.id)}>
+								<div class="flex items-center justify-end gap-2">
+									<!-- Convert to Jellyfin (Primary CTA - only for completed or seeding torrents) -->
+									{#if torrent.status === TORRENT_STATUS.COMPLETED || torrent.status === TORRENT_STATUS.SEEDING}
 										<Button
-											variant="ghost"
+											variant="default"
 											size="icon"
-											type="submit"
+											onclick={() => handleConvertClick(torrent)}
 											class="h-8 w-8"
-											title={torrent.status === 'paused' ? 'Resume torrent' : 'Pause torrent'}
+											title="Convert to Jellyfin"
 										>
-											{#if torrent.status === 'paused'}
-												<Play class="h-4 w-4" />
-											{:else}
-												<Pause class="h-4 w-4" />
-											{/if}
+											<Monitor class="h-4 w-4" />
 										</Button>
-									</form>
-								{/if}
+									{/if}
 
-								<!-- Info Button -->
-								<Button
-									variant="ghost"
-									size="icon"
-									onclick={() => onShowInfo(torrent)}
-									class="h-8 w-8"
-									title="View torrent details"
-								>
-									<Info class="h-4 w-4" />
-								</Button>
+									<!-- Toggle Play/Pause -->
+									{#if torrent.status !== TORRENT_STATUS.ERROR}
+										<form
+											method="POST"
+											action="?/toggle"
+											use:enhance={({ formData }) => {
+												// Derive desired state without a hidden input
+												const nextState = torrent.status === 'paused' ? 'play' : 'pause';
+												formData.set('state', nextState);
 
-								<!-- Delete -->
-								<Button
-									variant="ghost"
-									size="icon"
-									onclick={() => handleDeleteClick(torrent)}
-									class="text-destructive hover:text-destructive h-8 w-8"
-									title="Delete torrent"
-								>
-									<Trash2 class="h-4 w-4" />
-								</Button>
-							</div>
-						</Table.Cell>
-					</Table.Row>
+												return async ({ result }) => {
+													if (result.type === 'success') {
+														const updatedTorrent = result.data!.torrent as Torrent;
+														onToggleSuccess(updatedTorrent);
+													}
+												};
+											}}
+										>
+											<input type="hidden" name="torrentId" value={torrent.id} />
+											<Button
+												variant="ghost"
+												size="icon"
+												type="submit"
+												class="h-8 w-8"
+												title={torrent.status === 'paused' ? 'Resume torrent' : 'Pause torrent'}
+											>
+												{#if torrent.status === 'paused'}
+													<Play class="h-4 w-4" />
+												{:else}
+													<Pause class="h-4 w-4" />
+												{/if}
+											</Button>
+										</form>
+									{/if}
+
+									<!-- Info Button -->
+									<Button
+										variant="ghost"
+										size="icon"
+										onclick={() => onShowInfo(torrent)}
+										class="h-8 w-8"
+										title="View torrent details"
+									>
+										<Info class="h-4 w-4" />
+									</Button>
+
+									<!-- Delete -->
+									<Button
+										variant="ghost"
+										size="icon"
+										onclick={() => handleDeleteClick(torrent)}
+										class="text-destructive hover:text-destructive h-8 w-8"
+										title="Delete torrent"
+									>
+										<Trash2 class="h-4 w-4" />
+									</Button>
+								</div>
+							</Table.Cell>
+						</Table.Row>
+					{/if}
 				{/each}
 			</Table.Body>
 		</Table.Root>
