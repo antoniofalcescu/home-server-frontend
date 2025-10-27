@@ -1,8 +1,15 @@
 import type { PageServerLoad, Actions } from './$types';
-import type { Torrent, MakeGetStatusRequestResult, TorrentInfo } from './types/_server';
-import { transformTorrentInfo } from './helpers/utils/_server';
+import type {
+	Torrent,
+	MakeGetStatusRequestResult,
+	TorrentInfo,
+	MakePauseRequestResult,
+	MakeResumeRequestResult
+} from './types/_server';
+import { transformTorrentInfo } from './helpers/utils/backend';
 import { API_BASE_URL } from '$env/static/private';
 import { fail } from '@sveltejs/kit';
+import { TORRENT_STATUS } from './constants/_server';
 
 let torrentsCache: Torrent[] = [];
 function getInMemoryCachedTorrents(): Torrent[] {
@@ -57,6 +64,98 @@ async function makeGetStatusRequest(locals: App.Locals): Promise<MakeGetStatusRe
 	}
 }
 
+async function makePauseRequest(
+	locals: App.Locals,
+	torrentId: string
+): Promise<MakePauseRequestResult> {
+	const { security, session } = locals;
+	security.requireAuth(session);
+
+	try {
+		const response = await fetch(`${API_BASE_URL}/api/v1/torrent/pause/${torrentId}`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.token}`
+			}
+		});
+		if (!response.ok) {
+			const parsedResponse = await response.json();
+
+			console.error(parsedResponse);
+
+			return {
+				success: false,
+				error: {
+					status: response.status,
+					message: parsedResponse.message ?? 'Pause torrent failed'
+				}
+			};
+		}
+
+		return {
+			success: true,
+			data: undefined
+		};
+	} catch (error) {
+		console.error(error);
+
+		return {
+			success: false,
+			error: {
+				status: 500,
+				message: 'Pause torrent failed'
+			}
+		};
+	}
+}
+
+async function makeResumeRequest(
+	locals: App.Locals,
+	torrentId: string
+): Promise<MakeResumeRequestResult> {
+	const { security, session } = locals;
+	security.requireAuth(session);
+
+	try {
+		const response = await fetch(`${API_BASE_URL}/api/v1/torrent/resume/${torrentId}`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.token}`
+			}
+		});
+		if (!response.ok) {
+			const parsedResponse = await response.json();
+
+			console.error(parsedResponse);
+
+			return {
+				success: false,
+				error: {
+					status: response.status,
+					message: parsedResponse.message ?? 'Resume torrent failed'
+				}
+			};
+		}
+
+		return {
+			success: true,
+			data: undefined
+		};
+	} catch (error) {
+		console.error(error);
+
+		return {
+			success: false,
+			error: {
+				status: 500,
+				message: 'Resume torrent failed'
+			}
+		};
+	}
+}
+
 export const load: PageServerLoad = async ({ locals }) => {
 	const makeGetStatusRequestResult = await makeGetStatusRequest(locals);
 
@@ -77,46 +176,35 @@ export const actions: Actions = {
 	toggle: async ({ request, locals }) => {
 		const data = await request.formData();
 		const torrentId = data.get('torrentId') as string;
-		const state = (data.get('state') as string) ?? '';
+		const state = data.get('state') as string;
 
-		const { security, session } = locals;
-		security.requireAuth(session);
-
-		if (!torrentId || (state !== 'play' && state !== 'pause')) {
+		if (!torrentId || !state || (state !== 'play' && state !== 'pause')) {
 			return fail(400, {
 				success: false,
 				message: 'Invalid request'
 			});
 		}
 
-		const endpoint = state === 'pause' ? 'pause' : 'resume';
-		const url = `${API_BASE_URL}/api/v1/torrent/${endpoint}/${torrentId}`;
+		const shouldMakePauseRequest = state === 'pause';
 
-		try {
-			const response = await fetch(url, {
-				method: 'POST',
-				headers: {
-					Authorization: `Bearer ${session.token}`
-				}
+		const makeRequestResult = shouldMakePauseRequest
+			? await makePauseRequest(locals, torrentId)
+			: await makeResumeRequest(locals, torrentId);
+
+		if (!makeRequestResult.success) {
+			return fail(makeRequestResult.error.status, {
+				success: false,
+				message: makeRequestResult.error.message
 			});
-
-			if (!response.ok) {
-				const parsed = await response.json().catch(() => ({}));
-				return fail(response.status, {
-					success: false,
-					message: parsed.message ?? 'Toggle torrent failed'
-				});
-			}
-
-			const torrents = getInMemoryCachedTorrents();
-			const updatedTorrent = torrents.find((t) => t.id === torrentId)!;
-			updatedTorrent.status = state === 'pause' ? 'paused' : 'downloading';
-
-			return { success: true, torrent: updatedTorrent };
-		} catch (error) {
-			console.error(error);
-			return fail(500, { success: false, message: 'Toggle torrent failed' });
 		}
+
+		const torrents = getInMemoryCachedTorrents();
+		const updatedTorrent = torrents.find((t) => t.id === torrentId)!;
+		updatedTorrent.status = shouldMakePauseRequest
+			? TORRENT_STATUS.PAUSED
+			: TORRENT_STATUS.DOWNLOADING;
+
+		return { success: true, torrent: updatedTorrent };
 	},
 
 	delete: async ({ request }) => {

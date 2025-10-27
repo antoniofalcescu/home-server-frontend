@@ -1,5 +1,5 @@
-import { TORRENT_STATUS } from '../../constants/_server';
-import type { Torrent, TorrentInfo } from '../../types/_server';
+import { TORRENT_STATUS } from '../../../constants/_server';
+import type { Torrent, TorrentInfo } from '../../../types/_server';
 
 function formatBytes(bytes: number): string {
 	if (bytes === 0) return '0 B';

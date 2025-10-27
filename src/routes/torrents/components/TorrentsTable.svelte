@@ -10,6 +10,13 @@
 	import { DeleteConfirmationDialog, ConvertConfirmationDialog } from './index';
 	import type { Torrent } from '../types/_server';
 	import { TORRENT_STATUS } from '../constants/_server';
+	import {
+		getTorrentById,
+		getStatusBadgeVariant,
+		getTorrentRowClass,
+		getTorrentRowStyle,
+		getTorrentCellStyle
+	} from '../helpers/utils/frontend/torrents-table-utils';
 
 	// TODO: check the existing code and look for ways to refactor it and simplify it
 	const {
@@ -41,31 +48,6 @@
 	let hiddenTorrentIds: Set<string> = $state(new Set<string>());
 
 	// --- Helpers --------------------------------------------------------------
-	function getRow(id: string): Torrent | null {
-		return byId[id] ?? null;
-	}
-
-	function isDeletingRow(torrentId: string) {
-		return deletingTorrentIds.has(torrentId);
-	}
-
-	function getRowClass(torrentId: string) {
-		return `transition-all duration-400 ease-out ${
-			isDeletingRow(torrentId)
-				? 'translate-x-6 scale-90 opacity-0'
-				: 'translate-x-0 scale-100 opacity-100'
-		}`;
-	}
-
-	function getRowStyle(torrentId: string) {
-		return isDeletingRow(torrentId)
-			? 'max-height: 0; overflow: hidden; padding-top: 0; padding-bottom: 0;'
-			: `max-height: ${ROW_MAX_HEIGHT}px;`;
-	}
-
-	function getCellStyle(torrentId: string) {
-		return isDeletingRow(torrentId) ? 'padding-top: 0; padding-bottom: 0; line-height: 0;' : '';
-	}
 
 	export function animateRowDeletions(ids: string[]) {
 		if (!ids || ids.length === 0) {
@@ -85,23 +67,6 @@
 		setTimeout(() => {
 			ids.forEach((id) => onDeleteSuccess(id));
 		}, ANIMATION_DURATION_MS + 20);
-	}
-
-	function getStatusBadgeVariant(status: Torrent['status']) {
-		switch (status) {
-			case 'downloading':
-				return 'default';
-			case 'seeding':
-				return 'secondary';
-			case 'completed':
-				return 'secondary';
-			case 'paused':
-				return 'outline';
-			case 'error':
-				return 'destructive';
-			default:
-				return 'outline';
-		}
 	}
 
 	function handleDeleteClick(torrent: Torrent) {
@@ -201,27 +166,36 @@
 			</Table.Header>
 			<Table.Body>
 				{#each ids as id (id)}
-					{@const torrent = getRow(id)}
+					{@const torrent = getTorrentById(byId, id)}
 					{#if torrent && !hiddenTorrentIds.has(torrent.id)}
-						<Table.Row class={getRowClass(torrent.id)} style={getRowStyle(torrent.id)}>
-							<Table.Cell style={getCellStyle(torrent.id)}>
+						<Table.Row
+							class={getTorrentRowClass(torrent.id, deletingTorrentIds)}
+							style={getTorrentRowStyle(torrent.id, deletingTorrentIds)}
+						>
+							<Table.Cell style={getTorrentCellStyle(torrent.id, deletingTorrentIds)}>
 								<span class="text-lg">💾</span>
 							</Table.Cell>
-							<Table.Cell class="max-w-xs" style={getCellStyle(torrent.id)}>
+							<Table.Cell
+								class="max-w-xs"
+								style={getTorrentCellStyle(torrent.id, deletingTorrentIds)}
+							>
 								<div class="truncate font-medium">{torrent.name}</div>
 							</Table.Cell>
-							<Table.Cell style={getCellStyle(torrent.id)}>
+							<Table.Cell style={getTorrentCellStyle(torrent.id, deletingTorrentIds)}>
 								<Badge variant={getStatusBadgeVariant(torrent.status)}>
 									{torrent.status}
 								</Badge>
 							</Table.Cell>
-							<Table.Cell class="w-1/3" style={getCellStyle(torrent.id)}>
+							<Table.Cell class="w-1/3" style={getTorrentCellStyle(torrent.id, deletingTorrentIds)}>
 								<div class="flex items-center gap-2">
 									<Progress value={torrent.progress} class="h-2 flex-1" />
 									<span class="min-w-[3rem] text-sm font-medium">{torrent.progress}%</span>
 								</div>
 							</Table.Cell>
-							<Table.Cell class="text-right" style={getCellStyle(torrent.id)}>
+							<Table.Cell
+								class="text-right"
+								style={getTorrentCellStyle(torrent.id, deletingTorrentIds)}
+							>
 								<div class="flex items-center justify-end gap-2">
 									<!-- Convert to Jellyfin (Primary CTA - only for completed or seeding torrents) -->
 									{#if torrent.status === TORRENT_STATUS.COMPLETED || torrent.status === TORRENT_STATUS.SEEDING}

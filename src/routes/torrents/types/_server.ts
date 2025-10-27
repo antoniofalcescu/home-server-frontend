@@ -44,3 +44,11 @@ export type TorrentAction = {
 export type MakeGetStatusRequestResult =
 	| GenericSuccessResult<TorrentInfo[]>
 	| GenericErrorResult<HttpError>;
+
+export type MakePauseRequestResult =
+	| GenericSuccessResult<undefined>
+	| GenericErrorResult<HttpError>;
+
+export type MakeResumeRequestResult =
+	| GenericSuccessResult<undefined>
+	| GenericErrorResult<HttpError>;
