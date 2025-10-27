@@ -52,3 +52,7 @@ export type MakePauseRequestResult =
 export type MakeResumeRequestResult =
 	| GenericSuccessResult<undefined>
 	| GenericErrorResult<HttpError>;
+
+export type MakeRemoveRequestResult =
+	| GenericSuccessResult<undefined>
+	| GenericErrorResult<HttpError>;

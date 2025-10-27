@@ -49,6 +49,15 @@
 
 	// --- Helpers --------------------------------------------------------------
 
+	function rollbackTorrentState(torrentId: string) {
+		const hidden = new Set(hiddenTorrentIds);
+		hidden.delete(torrentId);
+		hiddenTorrentIds = hidden;
+		const deleting = new Set(deletingTorrentIds);
+		deleting.delete(torrentId);
+		deletingTorrentIds = deleting;
+	}
+
 	export function animateRowDeletions(ids: string[]) {
 		if (!ids || ids.length === 0) {
 			return;
@@ -82,10 +91,8 @@
 	async function handleDeleteConfirm() {
 		if (!selectedTorrentForDelete) return;
 
-		// Start deletion animation
 		animateRowDeletions([selectedTorrentForDelete.id]);
 
-		// Submit the delete form immediately
 		const formData = new FormData();
 		formData.append('torrentId', selectedTorrentForDelete.id);
 
@@ -96,19 +103,11 @@
 			});
 
 			if (response.ok) {
-				// Wait for animation to complete, then refresh
 				await new Promise((resolve) => setTimeout(resolve, ANIMATION_DURATION_MS));
-				await invalidateAll(); // Refresh to update the data
 			}
 		} catch (error) {
 			console.error('Delete failed:', error);
-			// Roll back hidden state on error
-			const hidden = new Set(hiddenTorrentIds);
-			hidden.delete(selectedTorrentForDelete.id);
-			hiddenTorrentIds = hidden;
-			const deleting = new Set(deletingTorrentIds);
-			deleting.delete(selectedTorrentForDelete.id);
-			deletingTorrentIds = deleting;
+			rollbackTorrentState(selectedTorrentForDelete.id);
 		}
 	}
 
@@ -132,18 +131,11 @@
 					animateRowDeletions([selectedTorrentForConvert.id]);
 					await new Promise((resolve) => setTimeout(resolve, ANIMATION_DURATION_MS));
 				}
-				await invalidateAll(); // Refresh to update the data
 			}
 		} catch (error) {
 			console.error('Convert failed:', error);
 			if (deleteAfterConvert) {
-				// Roll back hidden state on error
-				const hidden = new Set(hiddenTorrentIds);
-				hidden.delete(selectedTorrentForConvert.id);
-				hiddenTorrentIds = hidden;
-				const deleting = new Set(deletingTorrentIds);
-				deleting.delete(selectedTorrentForConvert.id);
-				deletingTorrentIds = deleting;
+				rollbackTorrentState(selectedTorrentForConvert.id);
 			}
 		}
 	}

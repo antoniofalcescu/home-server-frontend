@@ -4,7 +4,8 @@ import type {
 	MakeGetStatusRequestResult,
 	TorrentInfo,
 	MakePauseRequestResult,
-	MakeResumeRequestResult
+	MakeResumeRequestResult,
+	MakeRemoveRequestResult
 } from './types/_server';
 import { transformTorrentInfo } from './helpers/utils/backend';
 import { API_BASE_URL } from '$env/static/private';
@@ -13,7 +14,7 @@ import { TORRENT_STATUS } from './constants/_server';
 
 let torrentsCache: Torrent[] = [];
 function getInMemoryCachedTorrents(): Torrent[] {
-	return [...torrentsCache]; // Return a copy to prevent external mutations
+	return [...torrentsCache];
 }
 
 function updateInMemoryCacheTorrents(torrentsInfo: TorrentInfo[]): void {
@@ -156,6 +157,58 @@ async function makeResumeRequest(
 	}
 }
 
+async function makeRemoveRequest(
+	locals: App.Locals,
+	torrentId: string
+): Promise<MakeRemoveRequestResult> {
+	const { security, session } = locals;
+	security.requireAuth(session);
+
+	try {
+		const response = await fetch(`${API_BASE_URL}/api/v1/torrent/remove/${torrentId}`, {
+			method: 'DELETE',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.token}`
+			},
+			body: JSON.stringify({
+				options: {
+					shouldDeleteFiles: true
+				}
+			})
+		});
+
+		if (!response.ok) {
+			const parsedResponse = await response.json();
+
+			console.error(parsedResponse);
+
+			return {
+				success: false,
+				error: {
+					status: response.status,
+					message: parsedResponse.message ?? 'Delete torrent failed'
+				}
+			};
+		}
+
+		return {
+			success: true,
+			data: undefined
+		};
+	} catch (error) {
+		console.error(error);
+
+		return {
+			success: false,
+			error: {
+				status: 500,
+				message: 'Delete torrent failed'
+			}
+		};
+	}
+}
+
 export const load: PageServerLoad = async ({ locals }) => {
 	const makeGetStatusRequestResult = await makeGetStatusRequest(locals);
 
@@ -207,23 +260,30 @@ export const actions: Actions = {
 		return { success: true, torrent: updatedTorrent };
 	},
 
-	delete: async ({ request }) => {
+	delete: async ({ request, locals }) => {
 		const data = await request.formData();
 		const torrentId = data.get('torrentId') as string;
 
-		// Optimistically update cache
+		if (!torrentId) {
+			return fail(400, {
+				success: false,
+				message: 'Invalid request'
+			});
+		}
+
+		const makeRemoveRequestResult = await makeRemoveRequest(locals, torrentId);
+
+		if (!makeRemoveRequestResult.success) {
+			return fail(makeRemoveRequestResult.error.status, {
+				success: false,
+				message: makeRemoveRequestResult.error.message
+			});
+		}
+
 		torrentsCache = torrentsCache.filter((t) => t.id !== torrentId);
 
-		// TODO: In a real implementation, you might want to make an API call to the backend
-		// to actually delete the torrent from qBittorrent
-		// For now, we're just updating the cache optimistically
-
-		return {
-			success: true,
-			torrents: torrentsCache
-		};
+		return { success: true };
 	},
-
 	convert: async ({ request }) => {
 		const data = await request.formData();
 		const torrentId = data.get('torrentId') as string;

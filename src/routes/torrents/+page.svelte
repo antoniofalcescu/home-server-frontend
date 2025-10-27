@@ -21,7 +21,7 @@
 		torrentById = next;
 	}
 
-	const AUTO_SYNC_INTERVAL_IN_SECONDS = 100000;
+	const AUTO_SYNC_INTERVAL_IN_SECONDS = 10;
 
 	let lastSynced = $state(0);
 	let selectedTorrent: Torrent | null = $state(null);
