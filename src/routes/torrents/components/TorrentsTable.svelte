@@ -42,7 +42,6 @@
 	// Animation timing constants
 	const ANIMATION_DURATION_MS = 400;
 	const HIDE_DELAY_MS = 380; // slightly less so hide occurs right after fade completes
-	const ROW_MAX_HEIGHT = 200;
 
 	// Track which rows are hidden from the DOM after the fade completes
 	let hiddenTorrentIds: Set<string> = $state(new Set<string>());

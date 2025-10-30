@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { RefreshCcw } from 'lucide-svelte';
 	import { onMount } from 'svelte';
-	import { invalidateAll } from '$app/navigation';
+	import { invalidate } from '$app/navigation';
 	import type { PageData } from './$types';
 	import type { Torrent } from './types/_server';
 
@@ -10,15 +10,12 @@
 
 	const { data }: { data: PageData & { torrents: Torrent[] } } = $props();
 
-	// Normalized torrents for efficient per-row updates
 	let torrentsIds = $state<string[]>([]);
 	let torrentById = $state<Record<string, Torrent>>({});
 
 	function setFromList(list: Torrent[]) {
 		torrentsIds = list.map((t) => t.id);
-		const next: Record<string, Torrent> = {};
-		for (const t of list) next[t.id] = t;
-		torrentById = next;
+		torrentById = list.reduce((acc, t) => ({ ...acc, [t.id]: t }), {} as Record<string, Torrent>);
 	}
 
 	const AUTO_SYNC_INTERVAL_IN_SECONDS = 10;
@@ -28,36 +25,41 @@
 	let dialogOpen = $state(false);
 	let isSyncing = $state(false);
 	let tableRef: { animateRowDeletions: (ids: string[]) => void } | null = null;
-	let tickerIntervalId: number | null = null;
-	let nextSyncAt = $state(Date.now() + AUTO_SYNC_INTERVAL_IN_SECONDS * 1000);
+	let syncIntervalId: number | null = null;
 
-	onMount(() => {
-		// Initialize normalized state on first mount
-		setFromList(data.torrents);
-		function shouldSync() {
-			return document.visibilityState === 'visible' && !isSyncing && Date.now() >= nextSyncAt;
+	function resetSyncInterval() {
+		if (syncIntervalId !== null) {
+			clearInterval(syncIntervalId);
 		}
 
-		function tick() {
+		syncIntervalId = window.setInterval(() => {
+			if (document.visibilityState === 'visible' && !isSyncing) {
+				void handleSync();
+			}
+		}, AUTO_SYNC_INTERVAL_IN_SECONDS * 1000);
+	}
+
+	onMount(() => {
+		setFromList(data.torrents);
+
+		const counterIntervalId = window.setInterval(() => {
 			if (document.visibilityState === 'visible') {
 				lastSynced += 1;
 			}
-			if (shouldSync()) {
-				void handleSync();
-			}
-		}
+		}, 1000);
 
-		tickerIntervalId = window.setInterval(tick, 1000);
+		resetSyncInterval();
 
 		const onVisibilityChange = () => {
-			if (shouldSync()) {
+			if (document.visibilityState === 'visible' && !isSyncing) {
 				void handleSync();
 			}
 		};
 		document.addEventListener('visibilitychange', onVisibilityChange);
 
 		return () => {
-			if (tickerIntervalId !== null) clearInterval(tickerIntervalId);
+			clearInterval(counterIntervalId);
+			if (syncIntervalId !== null) clearInterval(syncIntervalId);
 			document.removeEventListener('visibilitychange', onVisibilityChange);
 		};
 	});
@@ -67,31 +69,11 @@
 
 		isSyncing = true;
 		try {
-			const response = await fetch('?/sync', {
-				method: 'POST',
-				body: new FormData()
-			});
+			await invalidate('torrents:list');
+			setFromList(data.torrents);
 
-			if (response.ok) {
-				// Prefer using action payload if present to update immediately
-				let usedPayload = false;
-				try {
-					const payload = (await response.json()) as { torrents?: Torrent[] };
-					if (payload?.torrents) {
-						setFromList(payload.torrents);
-						usedPayload = true;
-					}
-				} catch {}
-
-				if (!usedPayload) {
-					await invalidateAll();
-					setFromList(data.torrents);
-				}
-
-				// Fresh data received -> reset counter and next schedule
-				lastSynced = 0;
-				nextSyncAt = Date.now() + AUTO_SYNC_INTERVAL_IN_SECONDS * 1000;
-			}
+			lastSynced = 0;
+			resetSyncInterval();
 		} catch (error) {
 			console.error('Sync failed:', error);
 		} finally {
@@ -111,14 +93,13 @@
 
 	function handleDeleteSuccess(id: string) {
 		if (!torrentById[id]) return;
-		// Remove from byId and ids without a global reload
 		const { [id]: _omit, ...rest } = torrentById;
 		torrentById = rest;
 		torrentsIds = torrentsIds.filter((x) => x !== id);
 	}
 </script>
 
-<div class="bg-background min-h-screen p-6">
+<div class="bg-background p-6">
 	<div class="mx-auto max-w-7xl space-y-6">
 		<div class="flex items-center justify-between">
 			<div>

@@ -209,7 +209,9 @@ async function makeRemoveRequest(
 	}
 }
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, depends }) => {
+	depends('torrents:list');
+
 	const makeGetStatusRequestResult = await makeGetStatusRequest(locals);
 
 	if (!makeGetStatusRequestResult.success) {
@@ -220,6 +222,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	const { data: torrentsInfo } = makeGetStatusRequestResult;
+	console.log(torrentsInfo);
 	updateInMemoryCacheTorrents(torrentsInfo);
 
 	return { torrents: getInMemoryCachedTorrents() };
@@ -259,7 +262,6 @@ export const actions: Actions = {
 
 		return { success: true, torrent: updatedTorrent };
 	},
-
 	delete: async ({ request, locals }) => {
 		const data = await request.formData();
 		const torrentId = data.get('torrentId') as string;
@@ -317,21 +319,5 @@ export const actions: Actions = {
 				torrents: torrentsCache
 			};
 		}
-	},
-
-	sync: async ({ locals }) => {
-		const makeGetStatusRequestResult = await makeGetStatusRequest(locals);
-
-		if (!makeGetStatusRequestResult.success) {
-			return fail(makeGetStatusRequestResult.error.status, {
-				success: false,
-				message: makeGetStatusRequestResult.error.message
-			});
-		}
-
-		const { data: torrentsInfo } = makeGetStatusRequestResult;
-		updateInMemoryCacheTorrents(torrentsInfo);
-
-		return { torrents: getInMemoryCachedTorrents() };
 	}
 };
