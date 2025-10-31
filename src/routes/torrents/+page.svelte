@@ -6,9 +6,12 @@
 	import type { Torrent } from './types/_server';
 
 	import { Button } from '$lib/components/ui/button';
+	import { Toast } from '$lib/components/layout';
 	import { TorrentDetailsDialog, TorrentsTable } from './components';
 
 	const { data }: { data: PageData & { torrents: Torrent[] } } = $props();
+
+	let toastRef: Toast;
 
 	let torrentsIds = $state<string[]>([]);
 	let torrentById = $state<Record<string, Torrent>>({});
@@ -97,6 +100,14 @@
 		torrentById = rest;
 		torrentsIds = torrentsIds.filter((x) => x !== id);
 	}
+
+	function handleConvertSuccess(message: string) {
+		toastRef?.showToast('success', message);
+	}
+
+	function handleConvertError(message: string) {
+		toastRef?.showToast('error', message);
+	}
 </script>
 
 <div class="bg-background p-6">
@@ -125,8 +136,12 @@
 			onShowInfo={handleShowTorrentInfo}
 			onToggleSuccess={handleToggleSuccess}
 			onDeleteSuccess={handleDeleteSuccess}
+			onConvertSuccess={handleConvertSuccess}
+			onConvertError={handleConvertError}
 		/>
 	</div>
 </div>
 
 <TorrentDetailsDialog bind:open={dialogOpen} torrent={selectedTorrent} />
+
+<Toast bind:this={toastRef} />

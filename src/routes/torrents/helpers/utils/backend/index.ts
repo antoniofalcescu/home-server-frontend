@@ -30,23 +30,15 @@ function formatETA(seconds: number): string {
 }
 
 function mapTorrentStatus(apiState: string): Torrent['status'] {
-	if (apiState.includes('downloading') || apiState.includes('stalledDL')) {
+	if (['downloading', 'stalledDL'].includes(apiState)) {
 		return TORRENT_STATUS.DOWNLOADING;
-	} else if (
-		apiState.includes('uploading') ||
-		apiState.includes('stalledUP') ||
-		apiState.includes('queuedUP')
-	) {
+	} else if (['uploading', 'stalledUP', 'queuedUP'].includes(apiState)) {
 		return TORRENT_STATUS.SEEDING;
-	} else if (
-		apiState.includes('pausedDL') ||
-		apiState.includes('pausedUP') ||
-		apiState.includes('stoppedDL')
-	) {
+	} else if (['pausedDL', 'pausedUP', 'stoppedDL'].includes(apiState)) {
 		return TORRENT_STATUS.PAUSED;
-	} else if (apiState.includes('completed')) {
+	} else if (['completed', 'stoppedUP'].includes(apiState)) {
 		return TORRENT_STATUS.COMPLETED;
-	} else if (apiState.includes('error') || apiState.includes('missingfiles')) {
+	} else if (['error', 'missingfiles'].includes(apiState)) {
 		return TORRENT_STATUS.ERROR;
 	} else {
 		return TORRENT_STATUS.ERROR;

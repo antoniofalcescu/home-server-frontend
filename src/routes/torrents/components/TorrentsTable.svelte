@@ -20,17 +20,21 @@
 
 	// TODO: check the existing code and look for ways to refactor it and simplify it
 	const {
-		torrentsIds: ids,
-		torrentById: byId,
+		torrentsIds,
+		torrentById,
 		onShowInfo,
 		onToggleSuccess,
-		onDeleteSuccess
+		onDeleteSuccess,
+		onConvertSuccess,
+		onConvertError
 	}: {
 		torrentsIds: string[];
 		torrentById: Record<string, Torrent>;
 		onShowInfo: (torrent: Torrent) => void;
 		onToggleSuccess: (torrent: Torrent) => void;
 		onDeleteSuccess: (id: string) => void;
+		onConvertSuccess: (message: string) => void;
+		onConvertError: (message: string) => void;
 	} = $props();
 
 	let deleteDialogOpen = $state(false);
@@ -49,12 +53,8 @@
 	// --- Helpers --------------------------------------------------------------
 
 	function rollbackTorrentState(torrentId: string) {
-		const hidden = new Set(hiddenTorrentIds);
-		hidden.delete(torrentId);
-		hiddenTorrentIds = hidden;
-		const deleting = new Set(deletingTorrentIds);
-		deleting.delete(torrentId);
-		deletingTorrentIds = deleting;
+		hiddenTorrentIds.delete(torrentId);
+		deletingTorrentIds.delete(torrentId);
 	}
 
 	export function animateRowDeletions(ids: string[]) {
@@ -62,13 +62,9 @@
 			return;
 		}
 
-		const nextDeleting = new Set(deletingTorrentIds);
-		ids.forEach((id) => nextDeleting.add(id));
-		deletingTorrentIds = nextDeleting;
+		ids.forEach((id) => deletingTorrentIds.add(id));
 		setTimeout(() => {
-			const hidden = new Set(hiddenTorrentIds);
-			ids.forEach((id) => hidden.add(id));
-			hiddenTorrentIds = hidden;
+			ids.forEach((id) => hiddenTorrentIds.add(id));
 		}, HIDE_DELAY_MS);
 
 		// After animation completes, inform parent to remove rows
@@ -109,35 +105,6 @@
 			rollbackTorrentState(selectedTorrentForDelete.id);
 		}
 	}
-
-	async function handleConvertConfirm(deleteAfterConvert: boolean, type: 'movie' | 'tvShow') {
-		if (!selectedTorrentForConvert) return;
-
-		const formData = new FormData();
-		formData.append('torrentId', selectedTorrentForConvert.id);
-		formData.append('deleteAfterConvert', deleteAfterConvert.toString());
-		formData.append('type', type);
-
-		try {
-			const response = await fetch('?/convert', {
-				method: 'POST',
-				body: formData
-			});
-
-			if (response.ok) {
-				if (deleteAfterConvert) {
-					// Start deletion animation if deleting after convert
-					animateRowDeletions([selectedTorrentForConvert.id]);
-					await new Promise((resolve) => setTimeout(resolve, ANIMATION_DURATION_MS));
-				}
-			}
-		} catch (error) {
-			console.error('Convert failed:', error);
-			if (deleteAfterConvert) {
-				rollbackTorrentState(selectedTorrentForConvert.id);
-			}
-		}
-	}
 </script>
 
 <Card.Root>
@@ -156,8 +123,8 @@
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
-				{#each ids as id (id)}
-					{@const torrent = getTorrentById(byId, id)}
+				{#each torrentsIds as id (id)}
+					{@const torrent = getTorrentById(torrentById, id)}
 					{#if torrent && !hiddenTorrentIds.has(torrent.id)}
 						<Table.Row
 							class={getTorrentRowClass(torrent.id, deletingTorrentIds)}
@@ -277,5 +244,9 @@
 <ConvertConfirmationDialog
 	bind:open={convertDialogOpen}
 	torrent={selectedTorrentForConvert}
-	onConfirm={handleConvertConfirm}
+	onConvertSuccess={(torrentId, message) => {
+		animateRowDeletions([torrentId]);
+		onConvertSuccess(message);
+	}}
+	{onConvertError}
 />

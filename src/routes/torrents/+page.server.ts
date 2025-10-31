@@ -5,7 +5,8 @@ import type {
 	TorrentInfo,
 	MakePauseRequestResult,
 	MakeResumeRequestResult,
-	MakeRemoveRequestResult
+	MakeRemoveRequestResult,
+	MakeConvertRequestResult
 } from './types/_server';
 import { transformTorrentInfo } from './helpers/utils/backend';
 import { API_BASE_URL } from '$env/static/private';
@@ -209,6 +210,58 @@ async function makeRemoveRequest(
 	}
 }
 
+async function makeConvertRequest(
+	locals: App.Locals,
+	torrentName: string,
+	type: 'movie' | 'tvShow'
+): Promise<MakeConvertRequestResult> {
+	const { security, session } = locals;
+	security.requireAuth(session);
+
+	try {
+		const response = await fetch(`${API_BASE_URL}/api/v1/media/onDownloadFinished`, {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				Authorization: `Bearer ${session.token}`
+			},
+			body: JSON.stringify({
+				name: torrentName,
+				type
+			})
+		});
+
+		if (!response.ok) {
+			const parsedResponse = await response.json();
+
+			console.error(parsedResponse);
+
+			return {
+				success: false,
+				error: {
+					status: response.status,
+					message: parsedResponse.message ?? 'Convert torrent failed'
+				}
+			};
+		}
+
+		return {
+			success: true,
+			data: undefined
+		};
+	} catch (error) {
+		console.error(error);
+
+		return {
+			success: false,
+			error: {
+				status: 500,
+				message: 'Convert torrent failed'
+			}
+		};
+	}
+}
+
 export const load: PageServerLoad = async ({ locals, depends }) => {
 	depends('torrents:list');
 
@@ -222,7 +275,6 @@ export const load: PageServerLoad = async ({ locals, depends }) => {
 	}
 
 	const { data: torrentsInfo } = makeGetStatusRequestResult;
-	console.log(torrentsInfo);
 	updateInMemoryCacheTorrents(torrentsInfo);
 
 	return { torrents: getInMemoryCachedTorrents() };
@@ -286,38 +338,49 @@ export const actions: Actions = {
 
 		return { success: true };
 	},
-	convert: async ({ request }) => {
+	convert: async ({ request, locals }) => {
 		const data = await request.formData();
 		const torrentId = data.get('torrentId') as string;
-		const deleteAfterConvert = data.get('deleteAfterConvert') === 'true';
-		const type = data.get('type');
+		const type = data.get('type') as 'movie' | 'tvShow';
 
-		// Log the type for now as requested
-		console.log('Torrent type:', type);
-
-		// In a real app, this would:
-		// 1. Move/copy files to Jellyfin directory based on type (movie/tvShow)
-		// 2. Update Jellyfin library
-		// 3. Optionally remove torrent based on deleteAfterConvert flag
-
-		if (deleteAfterConvert) {
-			// Optimistically remove the torrent if user opted to delete after conversion
-			torrentsCache = torrentsCache.filter((t) => t.id !== torrentId);
-			return {
-				success: true,
-				message: 'Torrent converted to Jellyfin format and deleted',
-				torrents: torrentsCache
-			};
-		} else {
-			// Optimistically keep the torrent but mark it as completed/seeding
-			torrentsCache = torrentsCache.map((t) =>
-				t.id === torrentId ? { ...t, status: 'seeding' as const } : t
-			);
-			return {
-				success: true,
-				message: 'Torrent converted to Jellyfin format',
-				torrents: torrentsCache
-			};
+		if (!torrentId || !type || (type !== 'movie' && type !== 'tvShow')) {
+			return fail(400, {
+				success: false,
+				message: 'Invalid request'
+			});
 		}
+
+		const torrent = torrentsCache.find((t) => t.id === torrentId);
+		if (!torrent) {
+			return fail(404, {
+				success: false,
+				message: 'Torrent not found'
+			});
+		}
+
+		const makeConvertRequestResult = await makeConvertRequest(locals, torrent.name, type);
+		if (!makeConvertRequestResult.success) {
+			console.log('Convert request failed');
+			return fail(makeConvertRequestResult.error.status, {
+				success: false,
+				message: makeConvertRequestResult.error.message
+			});
+		}
+
+		const makeRemoveRequestResult = await makeRemoveRequest(locals, torrentId);
+		if (!makeRemoveRequestResult.success) {
+			console.log('Delete request failed');
+			return fail(makeRemoveRequestResult.error.status, {
+				success: false,
+				message: 'Torrent converted successfully but deletion failed'
+			});
+		}
+
+		torrentsCache = torrentsCache.filter((t) => t.id !== torrentId);
+
+		return {
+			success: true,
+			message: 'Torrent successfully converted'
+		};
 	}
 };

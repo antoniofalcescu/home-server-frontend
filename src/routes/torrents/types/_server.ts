@@ -56,3 +56,7 @@ export type MakeResumeRequestResult =
 export type MakeRemoveRequestResult =
 	| GenericSuccessResult<undefined>
 	| GenericErrorResult<HttpError>;
+
+export type MakeConvertRequestResult =
+	| GenericSuccessResult<undefined>
+	| GenericErrorResult<HttpError>;

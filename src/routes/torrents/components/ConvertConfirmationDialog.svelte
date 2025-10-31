@@ -1,29 +1,32 @@
 <script lang="ts">
-	import { Monitor, Trash2 } from 'lucide-svelte';
+	import { Monitor } from 'lucide-svelte';
+	import { enhance } from '$app/forms';
 	import { Button } from '$lib/components/ui/button';
 	import * as Dialog from '$lib/components/ui/dialog';
-	import * as Checkbox from '$lib/components/ui/checkbox';
 	import * as Select from '$lib/components/ui/select';
 	import type { Torrent } from '../types/_server';
 
 	type TorrentType = 'movie' | 'tvShow';
 
+	const ANIMATION_DURATION_MS = 400;
+
 	let {
 		open = $bindable(),
 		torrent,
-		onConfirm
+		onConvertSuccess,
+		onConvertError
 	}: {
 		open: boolean;
 		torrent: Torrent | null;
-		onConfirm: (deleteAfterConvert: boolean, type: TorrentType) => void;
+		onConvertSuccess: (torrentId: string, message: string) => void;
+		onConvertError: (message: string) => void;
 	} = $props();
 
-	let deleteAfterConvert = $state(false);
 	let selectedType = $state<TorrentType | undefined>(undefined);
 	let showValidation = $state(false);
 
 	function resetState() {
-		deleteAfterConvert = false;
+		open = false;
 		selectedType = undefined;
 		showValidation = false;
 	}
@@ -35,19 +38,8 @@
 		}
 	}
 
-	function handleConfirm() {
-		if (!selectedType) {
-			showValidation = true; // Show validation error
-			return; // Don't confirm if type is not selected
-		}
-		onConfirm(deleteAfterConvert, selectedType);
-		resetState();
-		open = false;
-	}
-
 	function handleCancel() {
 		resetState();
-		open = false;
 	}
 
 	function getTypeLabel(type: TorrentType | undefined): string {
@@ -55,27 +47,80 @@
 		if (type === 'tvShow') return 'TV Show';
 		return 'Select the type of the torrent';
 	}
+
+	function validateForm(): boolean {
+		if (!selectedType) {
+			showValidation = true;
+			return false;
+		}
+
+		return true;
+	}
+
+	async function handleSuccess(torrentId: string, message: string) {
+		resetState();
+		onConvertSuccess(torrentId, message);
+		await new Promise((resolve) => setTimeout(resolve, ANIMATION_DURATION_MS));
+	}
+
+	function handleFailure(message: string) {
+		resetState();
+		onConvertError(message);
+	}
+
+	function getErrorMessage(result: { data?: unknown }): string {
+		const data = result.data as { message?: string } | undefined;
+		return data?.message || 'Failed to convert torrent';
+	}
 </script>
 
 <Dialog.Root {open} onOpenChange={handleOpenChange}>
-	<Dialog.Content class="max-w-lg">
-		<Dialog.Header>
-			<Dialog.Title class="text-primary flex items-center gap-2">
-				<Monitor class="h-5 w-5" />
-				Convert to Jellyfin
-			</Dialog.Title>
-			<Dialog.Description>
-				This will convert the torrent to a format compatible with your Jellyfin media server.
-			</Dialog.Description>
-		</Dialog.Header>
+	<Dialog.Content class="max-w-lg overflow-hidden">
+		<form
+			method="POST"
+			action="?/convert"
+			class="contents"
+			use:enhance={({ formData }) => {
+				if (!torrent || !validateForm()) {
+					return;
+				}
 
-		{#if torrent}
+				formData.set('torrentId', torrent.id);
+				formData.set('type', selectedType!);
+
+				return async ({ result, update }) => {
+					if (result.type === 'success') {
+						const { message } = result.data as { message: string };
+						await update();
+						await handleSuccess(torrent.id, message);
+					} else if (result.type === 'failure') {
+						handleFailure(getErrorMessage(result));
+					} else {
+						handleFailure('Failed to convert torrent');
+					}
+				};
+			}}
+		>
+			<input type="hidden" name="torrentId" value={torrent?.id} />
+			<input type="hidden" name="type" value={selectedType} />
+
+			<Dialog.Header>
+				<Dialog.Title class="text-primary flex items-center gap-2">
+					<Monitor class="h-5 w-5" />
+					Convert to Jellyfin
+				</Dialog.Title>
+				<Dialog.Description>
+					This will convert the torrent to a format compatible with your Jellyfin media server. The
+					torrent will be automatically removed after successful conversion.
+				</Dialog.Description>
+			</Dialog.Header>
+
 			<div class="space-y-4 py-4">
 				<!-- Torrent Info -->
-				<div class="bg-muted flex items-center gap-3 rounded-lg p-3">
-					<span class="text-lg">💾</span>
-					<div class="min-w-0 flex-1">
-						<p class="font-medium break-words">{torrent.name}</p>
+				<div class="bg-muted flex items-start gap-3 rounded-lg p-3">
+					<span class="shrink-0 text-lg">💾</span>
+					<div class="min-w-0 flex-1 overflow-hidden">
+						<p class="font-medium break-words break-all">{torrent?.name}</p>
 					</div>
 				</div>
 
@@ -100,32 +145,15 @@
 						<p class="text-destructive text-xs">Please select a content type to continue</p>
 					{/if}
 				</div>
-
-				<!-- Delete Option -->
-				<div class="flex items-start gap-3 rounded-lg border p-3">
-					<Checkbox.Root id="deleteAfterConvert" bind:checked={deleteAfterConvert} class="mt-0.5" />
-					<div class="flex-1">
-						<label
-							for="deleteAfterConvert"
-							class="flex cursor-pointer items-center gap-2 font-medium"
-						>
-							<Trash2 class="text-muted-foreground h-4 w-4" />
-							Delete torrent after conversion
-						</label>
-						<p class="text-muted-foreground mt-1 text-sm">
-							Remove the original torrent file from downloads after successful conversion.
-						</p>
-					</div>
-				</div>
 			</div>
-		{/if}
 
-		<Dialog.Footer class="flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2">
-			<Button variant="outline" onclick={handleCancel}>Cancel</Button>
-			<Button variant="default" onclick={handleConfirm} disabled={showValidation && !selectedType}>
-				<Monitor class="mr-2 h-4 w-4" />
-				Convert to Jellyfin
-			</Button>
-		</Dialog.Footer>
+			<Dialog.Footer class="flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2">
+				<Button type="button" variant="outline" onclick={handleCancel}>Cancel</Button>
+				<Button type="submit" variant="default" disabled={showValidation && !selectedType}>
+					<Monitor class="mr-2 h-4 w-4" />
+					Convert to Jellyfin
+				</Button>
+			</Dialog.Footer>
+		</form>
 	</Dialog.Content>
 </Dialog.Root>
