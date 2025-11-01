@@ -8,6 +8,7 @@
 
 	type TorrentType = 'movie' | 'tvShow';
 
+	// TODO: create a single source of truth place for these kind of constants
 	const ANIMATION_DURATION_MS = 400;
 
 	let {

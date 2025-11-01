@@ -20,6 +20,7 @@
 	}
 </script>
 
+<!-- TODO: make a similar request approach as in ConvertConfirmationDialog.svelte -->
 <Dialog.Root bind:open>
 	<Dialog.Content class="max-w-lg">
 		<Dialog.Header>
@@ -35,9 +36,9 @@
 		{#if torrent}
 			<div class="py-4">
 				<div class="bg-muted flex items-center gap-3 rounded-lg p-3">
-					<span class="text-lg">💾</span>
-					<div class="min-w-0 flex-1">
-						<p class="font-medium break-words">{torrent.name}</p>
+					<span class="shrink-0 text-lg">💾</span>
+					<div class="min-w-0 flex-1 overflow-hidden">
+						<p class="font-medium break-words break-all">{torrent.name}</p>
 					</div>
 				</div>
 			</div>

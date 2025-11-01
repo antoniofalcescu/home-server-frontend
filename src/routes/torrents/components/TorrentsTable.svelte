@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { Info, Play, Pause, Trash2, Monitor } from 'lucide-svelte';
 	import { enhance } from '$app/forms';
-	import { invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Progress } from '$lib/components/ui/progress';
@@ -53,8 +52,8 @@
 	// --- Helpers --------------------------------------------------------------
 
 	function rollbackTorrentState(torrentId: string) {
-		hiddenTorrentIds.delete(torrentId);
-		deletingTorrentIds.delete(torrentId);
+		hiddenTorrentIds = new Set([...hiddenTorrentIds].filter((id) => id !== torrentId));
+		deletingTorrentIds = new Set([...deletingTorrentIds].filter((id) => id !== torrentId));
 	}
 
 	export function animateRowDeletions(ids: string[]) {
@@ -62,9 +61,9 @@
 			return;
 		}
 
-		ids.forEach((id) => deletingTorrentIds.add(id));
+		deletingTorrentIds = new Set([...deletingTorrentIds, ...ids]);
 		setTimeout(() => {
-			ids.forEach((id) => hiddenTorrentIds.add(id));
+			hiddenTorrentIds = new Set([...hiddenTorrentIds, ...ids]);
 		}, HIDE_DELAY_MS);
 
 		// After animation completes, inform parent to remove rows
