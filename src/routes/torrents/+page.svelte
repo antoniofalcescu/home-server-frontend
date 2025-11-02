@@ -101,8 +101,8 @@
 		torrentsIds = torrentsIds.filter((x) => x !== id);
 	}
 
-	function handleConvertSuccess(message: string) {
-		toastRef?.showToast('success', message);
+	function handleConvertSuccess(message: string, toastType: 'success' | 'warning') {
+		toastRef?.showToast(toastType, message);
 	}
 
 	function handleConvertError(message: string) {

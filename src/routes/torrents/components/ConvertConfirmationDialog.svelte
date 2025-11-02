@@ -19,7 +19,11 @@
 	}: {
 		open: boolean;
 		torrent: Torrent | null;
-		onConvertSuccess: (torrentId: string, message: string) => void;
+		onConvertSuccess: (
+			torrentId: string,
+			message: string,
+			toastType: 'success' | 'warning'
+		) => void;
 		onConvertError: (message: string) => void;
 	} = $props();
 
@@ -58,9 +62,13 @@
 		return true;
 	}
 
-	async function handleSuccess(torrentId: string, message: string) {
+	async function handleSuccess(torrentId: string, parsingSucceeded: boolean) {
 		resetState();
-		onConvertSuccess(torrentId, message);
+		const message = parsingSucceeded
+			? 'Torrent successfully converted'
+			: 'Conversion successful. Name parsing failed - please rename manually in Media page.';
+		const toastType: 'success' | 'warning' = parsingSucceeded ? 'success' : 'warning';
+		onConvertSuccess(torrentId, message, toastType);
 		await new Promise((resolve) => setTimeout(resolve, ANIMATION_DURATION_MS));
 	}
 
@@ -91,9 +99,11 @@
 
 				return async ({ result, update }) => {
 					if (result.type === 'success') {
-						const { message } = result.data as { message: string };
+						const { parsingSucceeded } = result.data as {
+							parsingSucceeded: boolean;
+						};
 						await update();
-						await handleSuccess(torrent.id, message);
+						await handleSuccess(torrent.id, parsingSucceeded);
 					} else if (result.type === 'failure') {
 						handleFailure(getErrorMessage(result));
 					} else {

@@ -245,9 +245,12 @@ async function makeConvertRequest(
 			};
 		}
 
+		const parsedResponse = await response.json();
+		const { parsingSucceeded } = parsedResponse;
+
 		return {
 			success: true,
-			data: undefined
+			data: { parsingSucceeded }
 		};
 	} catch (error) {
 		console.error(error);
@@ -367,6 +370,8 @@ export const actions: Actions = {
 			});
 		}
 
+		const { parsingSucceeded } = makeConvertRequestResult.data;
+
 		const makeRemoveRequestResult = await makeRemoveRequest(locals, torrentId);
 		if (!makeRemoveRequestResult.success) {
 			console.log('Delete request failed');
@@ -380,7 +385,7 @@ export const actions: Actions = {
 
 		return {
 			success: true,
-			message: 'Torrent successfully converted'
+			parsingSucceeded
 		};
 	}
 };

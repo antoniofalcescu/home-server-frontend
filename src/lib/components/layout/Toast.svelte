@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { Alert, AlertDescription } from '$lib/components/ui/alert';
-	import { CheckCircle, XCircle } from 'lucide-svelte';
+	import { CheckCircle, XCircle, AlertTriangle } from 'lucide-svelte';
 	import { fade, fly } from 'svelte/transition';
 
 	interface Toast {
 		id: string;
-		type: 'success' | 'error';
+		type: 'success' | 'error' | 'warning';
 		message: string;
 	}
 
@@ -16,7 +16,7 @@
 	let toasts = $state<Toast[]>([]);
 
 	// Main function: show a toast
-	export function showToast(type: 'success' | 'error', message: string) {
+	export function showToast(type: 'success' | 'error' | 'warning', message: string) {
 		const id = Date.now().toString(); // Simple ID generation
 
 		const toast: Toast = { id, type, message };
@@ -42,12 +42,16 @@
 				variant={toast.type === 'error' ? 'destructive' : 'default'}
 				class="max-w-sm min-w-80 cursor-pointer shadow-lg {toast.type === 'success'
 					? 'border-green-200 bg-green-50 text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200'
-					: ''}"
+					: toast.type === 'warning'
+						? 'border-yellow-200 bg-yellow-50 text-yellow-800 dark:border-yellow-800 dark:bg-yellow-950 dark:text-yellow-200'
+						: ''}"
 				onclick={() => dismissToast(toast.id)}
 			>
 				{#snippet children()}
 					{#if toast.type === 'success'}
 						<CheckCircle class="h-4 w-4 text-green-600 dark:text-green-400" />
+					{:else if toast.type === 'warning'}
+						<AlertTriangle class="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
 					{:else}
 						<XCircle class="h-4 w-4" />
 					{/if}

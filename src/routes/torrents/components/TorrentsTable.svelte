@@ -32,7 +32,7 @@
 		onShowInfo: (torrent: Torrent) => void;
 		onToggleSuccess: (torrent: Torrent) => void;
 		onDeleteSuccess: (id: string) => void;
-		onConvertSuccess: (message: string) => void;
+		onConvertSuccess: (message: string, toastType: 'success' | 'warning') => void;
 		onConvertError: (message: string) => void;
 	} = $props();
 
@@ -243,9 +243,9 @@
 <ConvertConfirmationDialog
 	bind:open={convertDialogOpen}
 	torrent={selectedTorrentForConvert}
-	onConvertSuccess={(torrentId, message) => {
+	onConvertSuccess={(torrentId, message, toastType) => {
 		animateRowDeletions([torrentId]);
-		onConvertSuccess(message);
+		onConvertSuccess(message, toastType);
 	}}
 	{onConvertError}
 />

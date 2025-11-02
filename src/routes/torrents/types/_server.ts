@@ -58,5 +58,5 @@ export type MakeRemoveRequestResult =
 	| GenericErrorResult<HttpError>;
 
 export type MakeConvertRequestResult =
-	| GenericSuccessResult<undefined>
+	| GenericSuccessResult<{ parsingSucceeded: boolean }>
 	| GenericErrorResult<HttpError>;
